@@ -67,15 +67,12 @@ contract Prefunding is IForwarder, AragonApp {
      * Modifiers
      */
 
+    // TODO: Add docs.
     modifier validateState {
         if(_elapsedTime() > fundingPeriod) {
             if(totalRaised < fundingGoal) _updateState(PrefundingState.Refunding);
             else _updateState(PrefundingState.Closed);
         }
-    }
-
-    function _elapsedTime() internal returns (uint64) {
-        return now.sub(startDate);
     }
 
     /*
@@ -100,7 +97,7 @@ contract Prefunding is IForwarder, AragonApp {
         // TODO
     }
 
-    function initializeFundraising() public validateState {
+    function close() public validateState {
         require(currentState == PrefundingState.Closed, ERROR_INVALID_STATE);
 
         // TODO
@@ -135,5 +132,9 @@ contract Prefunding is IForwarder, AragonApp {
             currentState = _newState;
             emit PrefundingStateChanged(currentState);
         }
+    }
+
+    function _elapsedTime() internal returns (uint64) {
+        return getTimestamp64().sub(startDate);
     }
 }
