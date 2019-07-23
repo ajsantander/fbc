@@ -50,6 +50,9 @@ contract Prefunding is IForwarder, AragonApp {
 
     PrefundingState public currentState;
 
+    // Multiplier used to avoid losing precision when using division or calculating percentages.
+    uint256 internal constant PRECISION_MULTIPLIER = 10 ** 16;
+
     // TODO: Add docs
     ERC20 purchasingToken;
 
@@ -58,20 +61,29 @@ contract Prefunding is IForwarder, AragonApp {
     MiniMeToken projectToken;
 
     // TODO: Add docs
-    uint64 startDate;
+    uint64 public startDate;
 
     // TODO: Add docs
-    uint256 totalRaised;
+    uint256 public totalRaised;
 
     // Initial amount in DAI required to be raised in order to start the project.
-    uint256 fundingGoal;
+    uint256 public fundingGoal;
 
     // Duration in which funds will be accepted.
-    uint64 fundingPeriod;
+    uint64 public fundingPeriod;
 
     // TODO: Add docs
-    uint64 vestingCliffDate;
-    uint64 vestingCompleteDate;
+    uint64 public vestingCliffDate;
+    uint64 public vestingCompleteDate;
+
+    // TODO: Add docs
+    uint256 public constant purchaseTokenConnectorWeight = 10;
+
+    // TODO: Add docs
+    uint256 public purchaseTokenExchangeRate;
+
+    // TODO: Add docs
+    uint256 public percentSupplyOffered;
 
     /*
      * Initializer 
@@ -82,7 +94,9 @@ contract Prefunding is IForwarder, AragonApp {
         MiniMeToken _projectToken,
         TokenManager _projectTokenManager,
         uint64 _vestingCliffDate,
-        uint64 _vestingCompleteDate
+        uint64 _vestingCompleteDate,
+        uint256 _fundingGoal,
+        uint256 _percentSupplyOffered
     ) 
         external 
         onlyInit 
@@ -106,6 +120,18 @@ contract Prefunding is IForwarder, AragonApp {
         // EG: Verify that vesting complete date < vesting cliff date.
         vestingCliffDate = _vestingCliffDate;
         vestingCompleteDate = _vestingCompleteDate;
+
+        // TODO: Validate
+        fundingGoal = _fundingGoal;
+
+        // TODO: Validate
+        percentSupplyOffered = _percentSupplyOffered;
+
+        // Calculate purchaseTokenExchangeRate.
+        uint256 exchangeRate = fundingGoal.mul(PRECISION_MULTIPLIER).div(purchaseTokenConnectorWeight);
+        exchangeRate = exchangeRate.mul(100).div(percentSupplyOffered);
+        exchangeRate = exchangeRate.div(PRECISION_MULTIPLIER);
+        purchaseTokenExchangeRate = exchangeRate;
     }
 
     /*
@@ -119,6 +145,15 @@ contract Prefunding is IForwarder, AragonApp {
             else _updateState(PrefundingState.Closed);
         }
         _;
+    }
+
+    /*
+     * Getters
+     */
+
+    // TODO: This could have a better name.
+    function getProjectTokenAmount(uint256 _purchasingTokenAmountToSpend) public view returns (uint256) {
+        return _purchasingTokenAmountToSpend * purchaseTokenExchangeRate;
     }
 
     /*
@@ -138,8 +173,7 @@ contract Prefunding is IForwarder, AragonApp {
 
         // Calculate the amount of project tokens that will be sold
         // for the provided purchasing token amount.
-        uint256 projectTokenAmountToSell = 1;
-        // TODO
+        uint256 projectTokenAmountToSell = getProjectTokenAmount(_purchasingTokenAmountToSpend);
 
         // Transfer purchasingTokens to this contract.
         purchasingToken.transferFrom(msg.sender, address(this), _purchasingTokenAmountToSpend);
@@ -153,6 +187,8 @@ contract Prefunding is IForwarder, AragonApp {
             vestingCompleteDate,
             true /* revokable */
         );
+
+        // TODO: Consider emitting an event.
     }
 
     function refund() public validateState {

@@ -101,8 +101,12 @@ const common = {
   },
 
   defaultSetup: async (test, managerAddress) => {
+
+    // Deploy DAO.
     await common.deployDAOFactory(test);
     await common.deployDAO(test, managerAddress);
+
+    // Deploy tokens and TokenManager.
     await common.deployTokens(test);
     await common.deployTokenManager(test, managerAddress);
     await test.projectToken.changeController(test.tokenManager.address);
@@ -111,11 +115,19 @@ const common = {
       true, /* transferable */
       0 /* macAccountTokens (infinite if set to 0) */
     );
+    
+    // Deploy Prefunding app.
     await common.deployApp(test, managerAddress);
+    const now = new Date().getTime() / 1000;
+    const HOURS = 3600;
     await test.app.initialize(
       test.purchasingToken.address,
       test.projectToken.address,
-      test.tokenManager.address
+      test.tokenManager.address,
+      now + 24 * HOURS, /* vestingCliffDate */
+      now + 72 * HOURS, /* vestingCompleteDate */
+      20000, /* fundingGoal */ 
+      90 /* percentSupplyOffered */
     );
   },
 
