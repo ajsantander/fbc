@@ -19,6 +19,7 @@ contract Prefunding is IForwarder, AragonApp {
      */
 
     event PrefundingStateChanged(PrefundingState _newState);
+    event ProjectTokensPurchased(address indexed owner, uint256 _purchaseTokensSpent, uint256 _projectTokensSold);
 
     /*
      * Errors
@@ -140,7 +141,7 @@ contract Prefunding is IForwarder, AragonApp {
 
     // TODO: Add docs.
     modifier validateState {
-        if(_elapsedTime() > fundingPeriod) {
+        if(_timeSinceFundingStarted() > fundingPeriod) {
             if(totalRaised < fundingGoal) _updateState(PrefundingState.Refunding);
             else _updateState(PrefundingState.Closed);
         }
@@ -160,12 +161,14 @@ contract Prefunding is IForwarder, AragonApp {
      * Public
      */
 
+    // TODO: Add docs.
     function start() public auth(START_ROLE) {
         require(currentState == PrefundingState.Pending, ERROR_INVALID_STATE);
         startDate = getTimestamp64();
         _updateState(PrefundingState.Funding);
     }
 
+    // TODO: Add docs.
     function buy(uint256 _purchasingTokenAmountToSpend) public validateState auth(BUY_ROLE) {
         require(currentState == PrefundingState.Funding, ERROR_INVALID_STATE);
         require(purchasingToken.balanceOf(msg.sender) >= _purchasingTokenAmountToSpend, ERROR_INSUFFICIENT_FUNDS);
@@ -178,7 +181,10 @@ contract Prefunding is IForwarder, AragonApp {
         // Transfer purchasingTokens to this contract.
         purchasingToken.transferFrom(msg.sender, address(this), _purchasingTokenAmountToSpend);
 
-        // Transger projectTokens to the sender (in vested form).
+        // Transfer projectTokens to the sender (in vested form).
+        // TODO: This assumes that msg.sender will not actually
+        // own the tokens before this sale ends. Make sure to validate that,
+        // because it would represent a critical issue otherwise.
         projectTokenManager.assignVested(
             msg.sender,
             projectTokenAmountToSell,
@@ -188,15 +194,17 @@ contract Prefunding is IForwarder, AragonApp {
             true /* revokable */
         );
 
-        // TODO: Consider emitting an event.
+        emit ProjectTokensPurchased(msg.sender, _purchasingTokenAmountToSpend, projectTokenAmountToSell);
     }
 
+    // TODO: Add docs.
     function refund() public validateState {
         require(currentState == PrefundingState.Refunding, ERROR_INVALID_STATE);
 
         // TODO
     }
 
+    // TODO: Add docs.
     function close() public validateState {
         require(currentState == PrefundingState.Closed, ERROR_INVALID_STATE);
 
@@ -237,7 +245,7 @@ contract Prefunding is IForwarder, AragonApp {
         }
     }
 
-    function _elapsedTime() internal returns (uint64) {
+    function _timeSinceFundingStarted() internal returns (uint64) {
         if(startDate == 0) return 0;
         else return getTimestamp64().sub(startDate);
     }
