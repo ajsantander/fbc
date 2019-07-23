@@ -23,5 +23,19 @@ contract('Prefunding', ([anyone, appManager]) => {
         })
       );
     });
+
+    it.skip('Project token is deployed and set in the app', async () => {
+      
+    });
+
+    it.skip('Purchase token is deployed and set in the app', async () => {
+      
+    });
+
+    it.skip('TokenManager is deployed, set in the app, and controls the project token', async () => {
+      
+    });
+
   });
+
 });
