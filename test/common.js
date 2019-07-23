@@ -75,7 +75,17 @@ const common = {
     await common.deployApp(test, managerAddress);
     // await common.deployTokens(test);
     await test.app.initialize();
+  },
+
+  sendTransaction: (data) => {
+    return new Promise((resolve, reject) => {
+      web3.eth.sendTransaction(data, (err, txHash) => {
+        if(err) reject(err);
+        else resolve(txHash);
+      });
+    });
   }
+
 };
 
 module.exports = common;
