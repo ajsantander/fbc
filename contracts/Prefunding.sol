@@ -3,6 +3,9 @@ pragma solidity ^0.4.24;
 import "@aragon/os/contracts/apps/AragonApp.sol";
 import "@aragon/os/contracts/common/IForwarder.sol";
 
+import "@aragon/os/contracts/lib/math/SafeMath.sol";
+import "@aragon/os/contracts/lib/math/SafeMath64.sol";
+
 contract Prefunding is IForwarder, AragonApp {
     using SafeMath for uint256;
     using SafeMath64 for uint64;
@@ -11,13 +14,14 @@ contract Prefunding is IForwarder, AragonApp {
      * Events
      */
 
-    event PrefundingStateChanged(FBState _newState);
+    event PrefundingStateChanged(PrefundingState _newState);
 
     /*
      * Errors
      */
 
     string internal constant ERROR_INVALID_STATE = "PREFUNDING_INVALID_STATE";
+    string internal constant ERROR_CAN_NOT_FORWARD = "CAN_NOT_FORWARD";
 
     /*
      * Roles.
@@ -73,6 +77,7 @@ contract Prefunding is IForwarder, AragonApp {
             if(totalRaised < fundingGoal) _updateState(PrefundingState.Refunding);
             else _updateState(PrefundingState.Closed);
         }
+        _;
     }
 
     /*
@@ -92,7 +97,7 @@ contract Prefunding is IForwarder, AragonApp {
     }
 
     function refund() public validateState {
-        require(currentState == PrefundingState.Refund, ERROR_INVALID_STATE);
+        require(currentState == PrefundingState.Refunding, ERROR_INVALID_STATE);
 
         // TODO
     }
@@ -102,6 +107,9 @@ contract Prefunding is IForwarder, AragonApp {
 
         // TODO
     }
+
+    // This contract is explicitely not payable.
+    function () external {}
 
     /*
      * IForwarder interface implementation.

@@ -25,6 +25,7 @@
     "eslint-plugin-standard": "^4.0.0",
     "ethlint": "^1.2.4",
     "prettier": "^1.18.2",
+    "truffle": "4.1.14",
     "solidity-coverage": "^0.6.2"
   },
   "scripts": {
