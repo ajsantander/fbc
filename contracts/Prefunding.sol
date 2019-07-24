@@ -33,7 +33,7 @@ contract Prefunding is IForwarder, AragonApp {
         Closed     // Sale reached fundingGoal and the Fundraising app is ready to be initialized.
     }
 
-    SaleState public _currentState;
+    SaleState public _currentSaleState;
 
     ERC20 private _purchasingToken;
     MiniMeToken private _projectToken;
@@ -49,7 +49,7 @@ contract Prefunding is IForwarder, AragonApp {
     uint64 private _vestingCompleteDate;
 
     uint256 private _percentSupplyOffered;
-    uint256 public _purchaseTokenExchangeRate;
+    uint256 private _purchaseTokenExchangeRate;
 
     uint256 private constant PRECISION_MULTIPLIER = 10 ** 16;
     uint256 private constant CONNECTOR_WEIGHT = 10;
@@ -76,8 +76,6 @@ contract Prefunding is IForwarder, AragonApp {
     {
         initialized();
 
-        _currentState = SaleState.Pending;
-
         _purchasingToken = purchasingToken;
         _setProjectToken(projectToken, projectTokenManager);
 
@@ -95,19 +93,14 @@ contract Prefunding is IForwarder, AragonApp {
         _calculateExchangeRate();
     }
 
-    // TODO: This could have a better name.
-    function getProjectTokenAmount(uint256 purchasingTokenAmountToSpend) public view returns (uint256) {
-        return purchasingTokenAmountToSpend.mul(_purchaseTokenExchangeRate);
-    }
-
     function start() public auth(START_ROLE) {
-        require(_currentState == SaleState.Pending, ERROR_INVALID_STATE);
+        require(_currentSaleState == SaleState.Pending, ERROR_INVALID_STATE);
         _startDate = getTimestamp64();
         _updateState(SaleState.Funding);
     }
 
     function buy(uint256 purchasingTokenAmountToSpend) public validateState auth(BUY_ROLE) {
-        require(_currentState == SaleState.Funding, ERROR_INVALID_STATE);
+        require(_currentSaleState == SaleState.Funding, ERROR_INVALID_STATE);
         require(_purchasingToken.balanceOf(msg.sender) >= purchasingTokenAmountToSpend, ERROR_INSUFFICIENT_FUNDS);
         require(_purchasingToken.allowance(msg.sender, address(this)) >= purchasingTokenAmountToSpend, ERROR_INSUFFICIENT_ALLOWANCE);
 
@@ -135,13 +128,18 @@ contract Prefunding is IForwarder, AragonApp {
     }
 
     function refund() public validateState {
-        require(_currentState == SaleState.Refunding, ERROR_INVALID_STATE);
+        require(_currentSaleState == SaleState.Refunding, ERROR_INVALID_STATE);
         // TODO
     }
 
     function close() public validateState {
-        require(_currentState == SaleState.Closed, ERROR_INVALID_STATE);
+        require(_currentSaleState == SaleState.Closed, ERROR_INVALID_STATE);
         // TODO
+    }
+
+    // TODO: This could have a better name.
+    function getProjectTokenAmount(uint256 purchasingTokenAmountToSpend) public view returns (uint256) {
+        return purchasingTokenAmountToSpend.mul(_purchaseTokenExchangeRate);
     }
 
     function isForwarder() external pure returns (bool) {
@@ -159,8 +157,8 @@ contract Prefunding is IForwarder, AragonApp {
     }
 
     function _updateState(SaleState newState) private {
-        if(newState != _currentState) {
-            _currentState = newState;
+        if(newState != _currentSaleState) {
+            _currentSaleState = newState;
             emit SaleStateChanged(newState);
         }
     }
@@ -171,7 +169,7 @@ contract Prefunding is IForwarder, AragonApp {
     }
 
     function _calculateExchangeRate() private {
-        uint256 exchangeRate = fundingGoal.mul(PRECISION_MULTIPLIER).div(CONNECTOR_WEIGHT);
+        uint256 exchangeRate = _fundingGoal.mul(PRECISION_MULTIPLIER).div(CONNECTOR_WEIGHT);
         exchangeRate = exchangeRate.mul(100).div(_percentSupplyOffered);
         exchangeRate = exchangeRate.div(PRECISION_MULTIPLIER);
         _purchaseTokenExchangeRate = exchangeRate;
@@ -183,4 +181,14 @@ contract Prefunding is IForwarder, AragonApp {
         _projectToken = projectToken;
         _projectTokenManager = projectTokenManager;
     }
+
+    function getProjectToken() public view returns (address) { return address(_projectToken); }
+    function getProjectTokenManager() public view returns (address) { return address(_projectTokenManager); }
+    function getPurchasingToken() public view returns (address) { return address(_purchasingToken); }
+    function getCurrentSaleState() public view returns (SaleState) { return _currentSaleState; }
+    function getFundingGoal() public view returns (uint256) { return _fundingGoal; }
+    function getTotalRaised() public view returns (uint256) { return _totalRaised; }
+    function getPercentSupplyOffered() public view returns (uint256) { return _percentSupplyOffered; }
+    function getVestingCliffDate() public view returns (uint64) { return _vestingCliffDate; }
+    function getVestingCompleteDate() public view returns (uint64) { return _vestingCompleteDate; }
 }

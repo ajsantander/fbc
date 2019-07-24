@@ -8,12 +8,27 @@ const Kernel = artifacts.require('@aragon/core/contracts/kernel/Kernel');
 const ERC20 = artifacts.require('@aragon/core/contracts/lib/token/ERC20');
 const getContract = name => artifacts.require(name);
 
+const NOW = new Date().getTime() / 1000;
+const HOURS = 3600;
+
 const common = {
 
   Prefunding,
 
   ANY_ADDRESS: '0xffffffffffffffffffffffffffffffffffffffff',
   ZERO_ADDRESS: '0x0000000000000000000000000000000000000000',
+
+  VESTING_CLIFF_DATE: NOW + 24 * HOURS,
+  VESTING_COMPLETE_DATE: NOW + 72 * HOURS,
+  FUNDING_GOAL: 20000,
+  PERCENT_SUPPLY_OFFERED: 90,
+
+  SALE_STATE: {
+    PENDING: 0,
+    FUNDING: 1,
+    REFUNDING: 2,
+    CLOSED: 3
+  },
 
   deployDAOFactory: async (test) => { 
     const kernelBase = await getContract('Kernel').new(true); // petrify immediately
@@ -118,16 +133,14 @@ const common = {
     
     // Deploy Prefunding app.
     await common.deployApp(test, managerAddress);
-    const now = new Date().getTime() / 1000;
-    const HOURS = 3600;
     await test.app.initialize(
       test.purchasingToken.address,
       test.projectToken.address,
       test.tokenManager.address,
-      now + 24 * HOURS, /* vestingCliffDate */
-      now + 72 * HOURS, /* vestingCompleteDate */
-      20000, /* fundingGoal */ 
-      90 /* percentSupplyOffered */
+      common.VESTING_CLIFF_DATE,
+      common.VESTING_COMPLETE_DATE,
+      common.FUNDING_GOAL,
+      common.PERCENT_SUPPLY_OFFERED
     );
   },
 
