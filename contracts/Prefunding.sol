@@ -14,239 +14,173 @@ contract Prefunding is IForwarder, AragonApp {
     using SafeMath for uint256;
     using SafeMath64 for uint64;
 
-    /*
-     * Events
-     */
+    event SaleStateChanged(SaleState newState);
+    event ProjectTokensPurchased(address indexed owner, uint256 purchaseTokensSpent, uint256 projectTokensSold);
 
-    event PrefundingStateChanged(PrefundingState _newState);
-    event ProjectTokensPurchased(address indexed owner, uint256 _purchaseTokensSpent, uint256 _projectTokensSold);
-
-    /*
-     * Errors
-     */
-
-    string internal constant ERROR_INVALID_STATE = "INVALID_STATE";
-    string internal constant ERROR_CAN_NOT_FORWARD = "CAN_NOT_FORWARD";
-    string internal constant ERROR_INSUFFICIENT_ALLOWANCE = "INSUFFICIENT_ALLOWANCE";
-    string internal constant ERROR_INSUFFICIENT_FUNDS = "INSUFFICIENT_FUNDS";
-    string internal constant ERROR_INVALID_TOKEN_CONTROLLER = "INVALID_TOKEN_CONTROLLER";
-
-    /*
-     * Roles.
-     */
+    string private constant ERROR_INVALID_STATE = "INVALID_STATE";
+    string private constant ERROR_CAN_NOT_FORWARD = "CAN_NOT_FORWARD";
+    string private constant ERROR_INSUFFICIENT_ALLOWANCE = "INSUFFICIENT_ALLOWANCE";
+    string private constant ERROR_INSUFFICIENT_FUNDS = "INSUFFICIENT_FUNDS";
+    string private constant ERROR_INVALID_TOKEN_CONTROLLER = "INVALID_TOKEN_CONTROLLER";
 
     bytes32 public constant START_ROLE = keccak256("START_ROLE");
     bytes32 public constant BUY_ROLE = keccak256("BUY_ROLE");
 
-    /*
-     * Properties
-     */
-
-    enum PrefundingState {
-        Pending,   // Initial state. Prefunding is closed and waiting to be started.
-        Funding,   // Prefunding has started, and contributors can purchase tokens.
-        Refunding, // Prefunding did not reach fundingGoal, and contributors may retrieve their funds.
-        Closed     // Prefunding reached fundingGoal, and the Fundraising app is ready to be initialized.
+    enum SaleState {
+        Pending,   // Sale is closed and waiting to be started.
+        Funding,   // Sale has started and contributors can purchase tokens.
+        Refunding, // Sale did not reach fundingGoal and contributors may retrieve their funds.
+        Closed     // Sale reached fundingGoal and the Fundraising app is ready to be initialized.
     }
 
-    PrefundingState public currentState;
+    SaleState public _currentState;
 
-    // Multiplier used to avoid losing precision when using division or calculating percentages.
-    uint256 internal constant PRECISION_MULTIPLIER = 10 ** 16;
+    ERC20 private _purchasingToken;
+    MiniMeToken private _projectToken;
+    TokenManager private _projectTokenManager;
 
-    // TODO: Add docs
-    ERC20 purchasingToken;
+    uint64 private _startDate;
 
-    // TODO: Add docs
-    TokenManager projectTokenManager;
-    MiniMeToken projectToken;
+    uint256 private _totalRaised;
+    uint256 private _fundingGoal;
+    uint64 private _fundingPeriod;
 
-    // TODO: Add docs
-    uint64 public startDate;
+    uint64 private _vestingCliffDate;
+    uint64 private _vestingCompleteDate;
 
-    // TODO: Add docs
-    uint256 public totalRaised;
+    uint256 private _percentSupplyOffered;
+    uint256 public _purchaseTokenExchangeRate;
 
-    // Initial amount in DAI required to be raised in order to start the project.
-    uint256 public fundingGoal;
+    uint256 private constant PRECISION_MULTIPLIER = 10 ** 16;
+    uint256 private constant CONNECTOR_WEIGHT = 10;
 
-    // Duration in which funds will be accepted.
-    uint64 public fundingPeriod;
-
-    // TODO: Add docs
-    uint64 public vestingCliffDate;
-    uint64 public vestingCompleteDate;
-
-    // TODO: Add docs
-    uint256 public constant purchaseTokenConnectorWeight = 10;
-
-    // TODO: Add docs
-    uint256 public purchaseTokenExchangeRate;
-
-    // TODO: Add docs
-    uint256 public percentSupplyOffered;
-
-    /*
-     * Initializer 
-     */
+    modifier validateState {
+        if(_timeSinceFundingStarted() > _fundingPeriod) {
+            if(_totalRaised < _fundingGoal) _updateState(SaleState.Refunding);
+            else _updateState(SaleState.Closed);
+        }
+        _;
+    }
 
     function initialize(
-        ERC20 _purchasingToken,
-        MiniMeToken _projectToken,
-        TokenManager _projectTokenManager,
-        uint64 _vestingCliffDate,
-        uint64 _vestingCompleteDate,
-        uint256 _fundingGoal,
-        uint256 _percentSupplyOffered
+        ERC20 purchasingToken,
+        MiniMeToken projectToken,
+        TokenManager projectTokenManager,
+        uint64 vestingCliffDate,
+        uint64 vestingCompleteDate,
+        uint256 fundingGoal,
+        uint256 percentSupplyOffered
     ) 
         external 
         onlyInit 
     {
         initialized();
 
-        currentState = PrefundingState.Pending;
+        _currentState = SaleState.Pending;
 
-        purchasingToken = _purchasingToken;
-        projectToken = _projectToken;
-
-        // Verify the that the token manager is valid
-        // and the current controller of the projectToken.
-        require(isContract(_projectTokenManager), ERROR_INVALID_TOKEN_CONTROLLER);
-        require(_projectToken.controller() == address(_projectTokenManager), ERROR_INVALID_TOKEN_CONTROLLER);
-        projectTokenManager = _projectTokenManager;
+        _purchasingToken = purchasingToken;
+        _setProjectToken(projectToken, projectTokenManager);
 
         // TODO: Perform validations regarding vesting and prefunding dates.
         // EG: Verify that versting cliff > sale period, otherwise
         // contributors would be able to exchange tokens before the sale ends.
         // EG: Verify that vesting complete date < vesting cliff date.
-        vestingCliffDate = _vestingCliffDate;
-        vestingCompleteDate = _vestingCompleteDate;
+        _vestingCliffDate = vestingCliffDate;
+        _vestingCompleteDate = vestingCompleteDate;
 
         // TODO: Validate
-        fundingGoal = _fundingGoal;
+        _fundingGoal = fundingGoal;
+        _percentSupplyOffered = percentSupplyOffered;
 
-        // TODO: Validate
-        percentSupplyOffered = _percentSupplyOffered;
-
-        // Calculate purchaseTokenExchangeRate.
-        uint256 exchangeRate = fundingGoal.mul(PRECISION_MULTIPLIER).div(purchaseTokenConnectorWeight);
-        exchangeRate = exchangeRate.mul(100).div(percentSupplyOffered);
-        exchangeRate = exchangeRate.div(PRECISION_MULTIPLIER);
-        purchaseTokenExchangeRate = exchangeRate;
+        _calculateExchangeRate();
     }
-
-    /*
-     * Modifiers
-     */
-
-    // TODO: Add docs.
-    modifier validateState {
-        if(_timeSinceFundingStarted() > fundingPeriod) {
-            if(totalRaised < fundingGoal) _updateState(PrefundingState.Refunding);
-            else _updateState(PrefundingState.Closed);
-        }
-        _;
-    }
-
-    /*
-     * Getters
-     */
 
     // TODO: This could have a better name.
-    function getProjectTokenAmount(uint256 _purchasingTokenAmountToSpend) public view returns (uint256) {
-        return _purchasingTokenAmountToSpend * purchaseTokenExchangeRate;
+    function getProjectTokenAmount(uint256 purchasingTokenAmountToSpend) public view returns (uint256) {
+        return purchasingTokenAmountToSpend.mul(_purchaseTokenExchangeRate);
     }
 
-    /*
-     * Public
-     */
-
-    // TODO: Add docs.
     function start() public auth(START_ROLE) {
-        require(currentState == PrefundingState.Pending, ERROR_INVALID_STATE);
-        startDate = getTimestamp64();
-        _updateState(PrefundingState.Funding);
+        require(_currentState == SaleState.Pending, ERROR_INVALID_STATE);
+        _startDate = getTimestamp64();
+        _updateState(SaleState.Funding);
     }
 
-    // TODO: Add docs.
-    function buy(uint256 _purchasingTokenAmountToSpend) public validateState auth(BUY_ROLE) {
-        require(currentState == PrefundingState.Funding, ERROR_INVALID_STATE);
-        require(purchasingToken.balanceOf(msg.sender) >= _purchasingTokenAmountToSpend, ERROR_INSUFFICIENT_FUNDS);
-        require(purchasingToken.allowance(msg.sender, address(this)) >= _purchasingTokenAmountToSpend, ERROR_INSUFFICIENT_ALLOWANCE);
+    function buy(uint256 purchasingTokenAmountToSpend) public validateState auth(BUY_ROLE) {
+        require(_currentState == SaleState.Funding, ERROR_INVALID_STATE);
+        require(_purchasingToken.balanceOf(msg.sender) >= purchasingTokenAmountToSpend, ERROR_INSUFFICIENT_FUNDS);
+        require(_purchasingToken.allowance(msg.sender, address(this)) >= purchasingTokenAmountToSpend, ERROR_INSUFFICIENT_ALLOWANCE);
 
         // Calculate the amount of project tokens that will be sold
         // for the provided purchasing token amount.
-        uint256 projectTokenAmountToSell = getProjectTokenAmount(_purchasingTokenAmountToSpend);
+        uint256 projectTokenAmountToSell = getProjectTokenAmount(purchasingTokenAmountToSpend);
 
         // Transfer purchasingTokens to this contract.
-        purchasingToken.transferFrom(msg.sender, address(this), _purchasingTokenAmountToSpend);
+        _purchasingToken.transferFrom(msg.sender, address(this), purchasingTokenAmountToSpend);
 
         // Transfer projectTokens to the sender (in vested form).
         // TODO: This assumes that msg.sender will not actually
         // own the tokens before this sale ends. Make sure to validate that,
         // because it would represent a critical issue otherwise.
-        projectTokenManager.assignVested(
+        _projectTokenManager.assignVested(
             msg.sender,
             projectTokenAmountToSell,
-            startDate,
-            vestingCliffDate,
-            vestingCompleteDate,
+            _startDate,
+            _vestingCliffDate,
+            _vestingCompleteDate,
             true /* revokable */
         );
 
-        emit ProjectTokensPurchased(msg.sender, _purchasingTokenAmountToSpend, projectTokenAmountToSell);
+        emit ProjectTokensPurchased(msg.sender, purchasingTokenAmountToSpend, projectTokenAmountToSell);
     }
 
-    // TODO: Add docs.
     function refund() public validateState {
-        require(currentState == PrefundingState.Refunding, ERROR_INVALID_STATE);
-
+        require(_currentState == SaleState.Refunding, ERROR_INVALID_STATE);
         // TODO
     }
 
-    // TODO: Add docs.
     function close() public validateState {
-        require(currentState == PrefundingState.Closed, ERROR_INVALID_STATE);
-
+        require(_currentState == SaleState.Closed, ERROR_INVALID_STATE);
         // TODO
     }
-
-    // This contract is explicitely not payable.
-    function () external {}
-
-    /*
-     * IForwarder interface implementation.
-     */
 
     function isForwarder() external pure returns (bool) {
         return true;
     }
 
-    // TODO: Define
-    function forward(bytes _evmScript) public {
-        require(canForward(msg.sender, _evmScript), ERROR_CAN_NOT_FORWARD);
-        // ...
+    function forward(bytes evmScript) public {
+        require(canForward(msg.sender, evmScript), ERROR_CAN_NOT_FORWARD);
+        // TODO
     }
 
-    // TODO: Define
-    function canForward(address _sender, bytes) public view returns (bool) {
-        // ...
+    function canForward(address sender, bytes) public view returns (bool) {
+        // TODO
         return true;
     }
 
-    /*
-     * Internal
-     */
-
-    function _updateState(PrefundingState _newState) internal {
-        if(_newState != currentState) {
-            currentState = _newState;
-            emit PrefundingStateChanged(currentState);
+    function _updateState(SaleState newState) private {
+        if(newState != _currentState) {
+            _currentState = newState;
+            emit SaleStateChanged(newState);
         }
     }
 
-    function _timeSinceFundingStarted() internal returns (uint64) {
-        if(startDate == 0) return 0;
-        else return getTimestamp64().sub(startDate);
+    function _timeSinceFundingStarted() private returns (uint64) {
+        if(_startDate == 0) return 0;
+        else return getTimestamp64().sub(_startDate);
+    }
+
+    function _calculateExchangeRate() private {
+        uint256 exchangeRate = fundingGoal.mul(PRECISION_MULTIPLIER).div(CONNECTOR_WEIGHT);
+        exchangeRate = exchangeRate.mul(100).div(_percentSupplyOffered);
+        exchangeRate = exchangeRate.div(PRECISION_MULTIPLIER);
+        _purchaseTokenExchangeRate = exchangeRate;
+    }
+
+    function _setProjectToken(MiniMeToken projectToken, TokenManager projectTokenManager) private {
+        require(isContract(projectTokenManager), ERROR_INVALID_TOKEN_CONTROLLER);
+        require(projectToken.controller() == address(projectTokenManager), ERROR_INVALID_TOKEN_CONTROLLER);
+        _projectToken = projectToken;
+        _projectTokenManager = projectTokenManager;
     }
 }
