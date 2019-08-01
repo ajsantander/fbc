@@ -22,6 +22,13 @@ const common = {
   VESTING_COMPLETE_DATE: NOW + 72 * HOURS,
   FUNDING_GOAL: 20000,
   PERCENT_SUPPLY_OFFERED: 90,
+  CONNECTOR_WEIGHT: 0.1,
+
+  expectedExchangeRate: () => {
+    return Math.floor(
+      (common.FUNDING_GOAL / common.CONNECTOR_WEIGHT) / common.PERCENT_SUPPLY_OFFERED
+    )
+  },
 
   SALE_STATE: {
     PENDING: 0,
@@ -30,7 +37,7 @@ const common = {
     CLOSED: 3
   },
 
-  deployDAOFactory: async (test) => { 
+  deployDAOFactory: async (test) => {
     const kernelBase = await getContract('Kernel').new(true); // petrify immediately
     const aclBase = await getContract('ACL').new();
     const regFact = await EVMScriptRegistryFactory.new();
@@ -61,7 +68,7 @@ const common = {
   },
 
   deployTokenManager: async (test, appManager) => {
-  
+
     const appBase = await TokenManager.new();
     // test.CREATE_PROPOSALS_ROLE            = await appBase.CREATE_PROPOSALS_ROLE();
 
@@ -88,7 +95,8 @@ const common = {
   deployApp: async (test, appManager) => {
 
     const appBase = await Prefunding.new();
-    // test.CREATE_PROPOSALS_ROLE            = await appBase.CREATE_PROPOSALS_ROLE();
+    test.START_ROLE = await appBase.START_ROLE();
+    test.BUY_ROLE = await appBase.BUY_ROLE();
 
     const daoInstanceReceipt = await test.dao.newAppInstance(
       '0x1234',
@@ -101,13 +109,20 @@ const common = {
     const proxy = daoInstanceReceipt.logs.filter(l => l.event === 'NewAppProxy')[0].args.proxy;
     test.app = Prefunding.at(proxy);
 
-    // await test.acl.createPermission(
-    //   common.ANY_ADDRESS,
-    //   test.app.address,
-    //   test.CREATE_PROPOSALS_ROLE,
-    //   appManager,
-    //   { from: appManager }
-    // );
+    await test.acl.createPermission(
+      appManager,
+      test.app.address,
+      test.START_ROLE,
+      appManager,
+      { from: appManager }
+    );
+    await test.acl.createPermission(
+      common.ANY_ADDRESS,
+      test.app.address,
+      test.BUY_ROLE,
+      appManager,
+      { from: appManager }
+    );
   },
 
   deployTokens: async (test) => {
@@ -130,7 +145,7 @@ const common = {
       true, /* transferable */
       0 /* macAccountTokens (infinite if set to 0) */
     );
-    
+
     // Deploy Prefunding app.
     await common.deployApp(test, managerAddress);
     await test.app.initialize(

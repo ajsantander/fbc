@@ -10,6 +10,7 @@ import "@aragon/os/contracts/lib/token/ERC20.sol";
 import "@aragon/apps-shared-minime/contracts/MiniMeToken.sol";
 import "@aragon/apps-token-manager/contracts/TokenManager.sol";
 
+
 contract Prefunding is IForwarder, AragonApp {
     using SafeMath for uint256;
     using SafeMath64 for uint64;
@@ -33,162 +34,158 @@ contract Prefunding is IForwarder, AragonApp {
         Closed     // Sale reached fundingGoal and the Fundraising app is ready to be initialized.
     }
 
-    SaleState public _currentSaleState;
+    SaleState public currentSaleState;
 
-    ERC20 private _purchasingToken;
-    MiniMeToken private _projectToken;
-    TokenManager private _projectTokenManager;
+    ERC20 public purchasingToken;
+    MiniMeToken public projectToken;
+    TokenManager public projectTokenManager;
 
-    uint64 private _startDate;
+    uint64 public startDate;
 
-    uint256 private _totalRaised;
-    uint256 private _fundingGoal;
-    uint64 private _fundingPeriod;
+    uint256 public totalRaised;
+    uint256 public fundingGoal;
+    uint64 public fundingPeriod;
 
-    uint64 private _vestingCliffDate;
-    uint64 private _vestingCompleteDate;
+    uint64 public vestingCliffDate;
+    uint64 public vestingCompleteDate;
 
-    uint256 private _percentSupplyOffered;
-    uint256 private _purchaseTokenExchangeRate;
+    uint256 public percentSupplyOffered;
+    uint256 public purchaseTokenExchangeRate;
 
-    uint256 private constant PRECISION_MULTIPLIER = 10 ** 16;
-    uint256 private constant CONNECTOR_WEIGHT = 10;
+    uint256 public constant PRECISION_MULTIPLIER = 10 ** 16;
+    uint256 public constant CONNECTOR_WEIGHT_INV = 10;
 
     modifier validateState {
-        if(_timeSinceFundingStarted() > _fundingPeriod) {
-            if(_totalRaised < _fundingGoal) _updateState(SaleState.Refunding);
-            else _updateState(SaleState.Closed);
+        if (_timeSinceFundingStarted() > fundingPeriod) {
+            if (totalRaised < fundingGoal) {
+                _updateState(SaleState.Refunding);
+            } else {
+                _updateState(SaleState.Closed);
+            }
         }
         _;
     }
 
     function initialize(
-        ERC20 purchasingToken,
-        MiniMeToken projectToken,
-        TokenManager projectTokenManager,
-        uint64 vestingCliffDate,
-        uint64 vestingCompleteDate,
-        uint256 fundingGoal,
-        uint256 percentSupplyOffered
-    ) 
-        external 
-        onlyInit 
+        ERC20 _purchasingToken,
+        MiniMeToken _projectToken,
+        TokenManager _projectTokenManager,
+        uint64 _vestingCliffDate,
+        uint64 _vestingCompleteDate,
+        uint256 _fundingGoal,
+        uint256 _percentSupplyOffered
+    )
+        external
+        onlyInit
     {
         initialized();
 
-        _purchasingToken = purchasingToken;
-        _setProjectToken(projectToken, projectTokenManager);
+        purchasingToken = _purchasingToken;
+        _setProjectToken(_projectToken, _projectTokenManager);
 
         // TODO: Perform validations regarding vesting and prefunding dates.
         // EG: Verify that versting cliff > sale period, otherwise
         // contributors would be able to exchange tokens before the sale ends.
         // EG: Verify that vesting complete date < vesting cliff date.
-        _vestingCliffDate = vestingCliffDate;
-        _vestingCompleteDate = vestingCompleteDate;
+        vestingCliffDate = _vestingCliffDate;
+        vestingCompleteDate = _vestingCompleteDate;
 
         // TODO: Validate
-        _fundingGoal = fundingGoal;
-        _percentSupplyOffered = percentSupplyOffered;
+        fundingGoal = _fundingGoal;
+        percentSupplyOffered = _percentSupplyOffered;
 
         _calculateExchangeRate();
     }
 
     function start() public auth(START_ROLE) {
-        require(_currentSaleState == SaleState.Pending, ERROR_INVALID_STATE);
-        _startDate = getTimestamp64();
+        require(currentSaleState == SaleState.Pending, ERROR_INVALID_STATE);
+        startDate = getTimestamp64();
         _updateState(SaleState.Funding);
     }
 
-    function buy(uint256 purchasingTokenAmountToSpend) public validateState auth(BUY_ROLE) {
-        require(_currentSaleState == SaleState.Funding, ERROR_INVALID_STATE);
-        require(_purchasingToken.balanceOf(msg.sender) >= purchasingTokenAmountToSpend, ERROR_INSUFFICIENT_FUNDS);
-        require(_purchasingToken.allowance(msg.sender, address(this)) >= purchasingTokenAmountToSpend, ERROR_INSUFFICIENT_ALLOWANCE);
+    function buy(uint256 _purchasingTokenAmountToSpend) public validateState auth(BUY_ROLE) {
+        require(currentSaleState == SaleState.Funding, ERROR_INVALID_STATE);
+        require(purchasingToken.balanceOf(msg.sender) >= _purchasingTokenAmountToSpend, ERROR_INSUFFICIENT_FUNDS);
+        require(purchasingToken.allowance(msg.sender, address(this)) >= _purchasingTokenAmountToSpend, ERROR_INSUFFICIENT_ALLOWANCE);
 
         // Calculate the amount of project tokens that will be sold
         // for the provided purchasing token amount.
-        uint256 projectTokenAmountToSell = getProjectTokenAmount(purchasingTokenAmountToSpend);
+        // uint256 projectTokenAmountToSell = getProjectTokenAmount(_purchasingTokenAmountToSpend);
 
         // Transfer purchasingTokens to this contract.
-        _purchasingToken.transferFrom(msg.sender, address(this), purchasingTokenAmountToSpend);
+        purchasingToken.transferFrom(msg.sender, address(this), _purchasingTokenAmountToSpend);
 
         // Transfer projectTokens to the sender (in vested form).
         // TODO: This assumes that msg.sender will not actually
         // own the tokens before this sale ends. Make sure to validate that,
         // because it would represent a critical issue otherwise.
-        _projectTokenManager.assignVested(
-            msg.sender,
-            projectTokenAmountToSell,
-            _startDate,
-            _vestingCliffDate,
-            _vestingCompleteDate,
-            true /* revokable */
-        );
+        // projectTokenManager.assignVested(
+        //     msg.sender,
+        //     _projectTokenAmountToSell,
+        //     startDate,
+        //     vestingCliffDate,
+        //     vestingCompleteDate,
+        //     true /* revokable */
+        // );
 
-        emit ProjectTokensPurchased(msg.sender, purchasingTokenAmountToSpend, projectTokenAmountToSell);
+        // emit ProjectTokensPurchased(msg.sender, _purchasingTokenAmountToSpend, projectTokenAmountToSell);
     }
 
     function refund() public validateState {
-        require(_currentSaleState == SaleState.Refunding, ERROR_INVALID_STATE);
+        require(currentSaleState == SaleState.Refunding, ERROR_INVALID_STATE);
         // TODO
     }
 
     function close() public validateState {
-        require(_currentSaleState == SaleState.Closed, ERROR_INVALID_STATE);
+        require(currentSaleState == SaleState.Closed, ERROR_INVALID_STATE);
         // TODO
     }
 
     // TODO: This could have a better name.
-    function getProjectTokenAmount(uint256 purchasingTokenAmountToSpend) public view returns (uint256) {
-        return purchasingTokenAmountToSpend.mul(_purchaseTokenExchangeRate);
+    function getProjectTokenAmount(uint256 _purchasingTokenAmountToSpend) public view returns (uint256) {
+        return _purchasingTokenAmountToSpend.mul(purchaseTokenExchangeRate);
     }
 
     function isForwarder() external pure returns (bool) {
         return true;
     }
 
-    function forward(bytes evmScript) public {
-        require(canForward(msg.sender, evmScript), ERROR_CAN_NOT_FORWARD);
+    function forward(bytes _evmScript) public {
+        require(canForward(msg.sender, _evmScript), ERROR_CAN_NOT_FORWARD);
         // TODO
     }
 
-    function canForward(address sender, bytes) public view returns (bool) {
+    function canForward(address _sender, bytes) public view returns (bool) {
         // TODO
         return true;
     }
 
-    function _updateState(SaleState newState) private {
-        if(newState != _currentSaleState) {
-            _currentSaleState = newState;
-            emit SaleStateChanged(newState);
+    function _updateState(SaleState _newState) private {
+        if (_newState != currentSaleState) {
+            currentSaleState = _newState;
+            emit SaleStateChanged(_newState);
         }
     }
 
     function _timeSinceFundingStarted() private returns (uint64) {
-        if(_startDate == 0) return 0;
-        else return getTimestamp64().sub(_startDate);
+        if (startDate == 0) {
+            return 0;
+        } else {
+            return getTimestamp64().sub(startDate);
+        }
     }
 
     function _calculateExchangeRate() private {
-        uint256 exchangeRate = _fundingGoal.mul(PRECISION_MULTIPLIER).div(CONNECTOR_WEIGHT);
-        exchangeRate = exchangeRate.mul(100).div(_percentSupplyOffered);
+        uint256 exchangeRate = fundingGoal.mul(PRECISION_MULTIPLIER).div(CONNECTOR_WEIGHT_INV);
+        exchangeRate = exchangeRate.mul(100).div(percentSupplyOffered);
         exchangeRate = exchangeRate.div(PRECISION_MULTIPLIER);
-        _purchaseTokenExchangeRate = exchangeRate;
+        purchaseTokenExchangeRate = exchangeRate;
     }
 
-    function _setProjectToken(MiniMeToken projectToken, TokenManager projectTokenManager) private {
-        require(isContract(projectTokenManager), ERROR_INVALID_TOKEN_CONTROLLER);
-        require(projectToken.controller() == address(projectTokenManager), ERROR_INVALID_TOKEN_CONTROLLER);
-        _projectToken = projectToken;
-        _projectTokenManager = projectTokenManager;
+    function _setProjectToken(MiniMeToken _projectToken, TokenManager _projectTokenManager) private {
+        require(isContract(_projectTokenManager), ERROR_INVALID_TOKEN_CONTROLLER);
+        require(_projectToken.controller() != address(projectTokenManager), ERROR_INVALID_TOKEN_CONTROLLER);
+        projectToken = _projectToken;
+        projectTokenManager = _projectTokenManager;
     }
-
-    function getProjectToken() public view returns (address) { return address(_projectToken); }
-    function getProjectTokenManager() public view returns (address) { return address(_projectTokenManager); }
-    function getPurchasingToken() public view returns (address) { return address(_purchasingToken); }
-    function getCurrentSaleState() public view returns (SaleState) { return _currentSaleState; }
-    function getFundingGoal() public view returns (uint256) { return _fundingGoal; }
-    function getTotalRaised() public view returns (uint256) { return _totalRaised; }
-    function getPercentSupplyOffered() public view returns (uint256) { return _percentSupplyOffered; }
-    function getVestingCliffDate() public view returns (uint64) { return _vestingCliffDate; }
-    function getVestingCompleteDate() public view returns (uint64) { return _vestingCompleteDate; }
 }

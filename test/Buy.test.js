@@ -1,12 +1,18 @@
 const {
   defaultSetup,
-  sendTransaction
+  sendTransaction,
+  SALE_STATE,
+  expectedExchangeRate
 } = require('./common.js');
 const { assertRevert } = require('@aragon/test-helpers/assertThrow');
 
-contract('Buy function', ([anyone, appManager]) => {
+const INIFINITE_ALLOWANCE = 100000000000000000;
 
-  beforeEach(() => defaultSetup(this, appManager));
+const BUYER_1_PURCHASING_BALANCE = 100;
+
+contract('Buy function', ([anyone, appManager, buyer1, buyer2]) => {
+
+  before(() => defaultSetup(this, appManager));
 
   describe('When using other tokens', () => {
 
@@ -22,4 +28,62 @@ contract('Buy function', ([anyone, appManager]) => {
 
   });
 
+  describe('When a user owns purchasing tokens', () => {
+
+    before(async () => {
+      await this.purchasingToken.generateTokens(buyer1, BUYER_1_PURCHASING_BALANCE);
+    });
+
+    it('User owns such tokens', async () => {
+      const balance = await this.purchasingToken.balanceOf(buyer1);
+      expect(balance.toNumber()).to.equal(BUYER_1_PURCHASING_BALANCE);
+    });
+
+    describe('When a user provides allowance for the purchasing token to the app', () => {
+
+      before(async () => {
+        await this.purchasingToken.approve(this.app.address, INIFINITE_ALLOWANCE, { from: buyer1 })
+      });
+
+      it('App should be allowed to transfer purchasing tokens', async () => {
+        const allowance = await this.purchasingToken.allowance(buyer1, this.app.address);
+        expect(allowance.toNumber()).to.equal(INIFINITE_ALLOWANCE);
+      });
+
+      it.skip('Reverts if the user attempts to buy tokens before the sale has started', async () => {
+        // TODO
+      });
+
+      describe('When the sale has started', () => {
+
+        before(async () => {
+          await this.app.start({ from: appManager });
+        });
+
+        it('App state should be Funding', async () => {
+          expect((await this.app.currentSaleState()).toNumber()).to.equal(SALE_STATE.FUNDING);
+        });
+
+        it('A user can ask the app how many project tokens would be obtained from a given amount of purchasing tokens', async () => {
+          const amount = (await this.app.getProjectTokenAmount(BUYER_1_PURCHASING_BALANCE)).toNumber();
+          const expectedAmount = BUYER_1_PURCHASING_BALANCE * expectedExchangeRate()
+          expect(amount).to.equal(expectedAmount)
+        });
+
+        describe('When a user buys project tokens', () => {
+
+          before(async () => {
+            await this.app.buy(BUYER_1_PURCHASING_BALANCE, { from: buyer1 });
+          });
+
+          it('The purchasing tokens are transferred from the user to the app', async () => {
+            const userBalance = await this.purchasingToken.balanceOf(buyer1);
+            const appBalance = await this.purchasingToken.balanceOf(this.app.address);
+            expect(userBalance.toNumber()).to.equal(0);
+            expect(appBalance.toNumber()).to.equal(BUYER_1_PURCHASING_BALANCE);
+          });
+        });
+      });
+    });
+  });
 });
