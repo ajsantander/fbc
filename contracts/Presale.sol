@@ -35,8 +35,6 @@ contract Presale is IForwarder, AragonApp {
         Closed     // Sale reached daiFundingGoal and the Fundraising app is ready to be initialized.
     }
 
-    SaleState public currentSaleState;
-
     ERC20 public daiToken;
     MiniMeToken public projectToken;
     TokenManager public projectTokenManager;
@@ -64,15 +62,18 @@ contract Presale is IForwarder, AragonApp {
      *      buyer
      */
 
-    modifier updatesState {
-        if (_timeSinceFundingStarted() > fundingPeriod) {
+    function currentSaleState() public view returns (SaleState) {
+        if (startDate == 0) {
+            return SaleState.Pending;
+        } else if (_timeSinceFundingStarted() < fundingPeriod) {
+            return SaleState.Funding;
+        } else {
             if (totalDaiRaised < daiFundingGoal) {
-                _updateState(SaleState.Refunding);
+                return SaleState.Refunding;
             } else {
-                _updateState(SaleState.Closed);
+                return SaleState.Closed;
             }
         }
-        _;
     }
 
     function initialize(
@@ -82,7 +83,8 @@ contract Presale is IForwarder, AragonApp {
         uint64 _vestingCliffDate,
         uint64 _vestingCompleteDate,
         uint256 _daiFundingGoal,
-        uint256 _percentSupplyOffered
+        uint256 _percentSupplyOffered,
+        uint64 _fundingPeriod
     )
         external
         onlyInit
@@ -100,6 +102,7 @@ contract Presale is IForwarder, AragonApp {
         vestingCompleteDate = _vestingCompleteDate;
 
         // TODO: Validate
+        fundingPeriod = _fundingPeriod;
         daiFundingGoal = _daiFundingGoal;
         percentSupplyOffered = _percentSupplyOffered;
 
@@ -107,13 +110,12 @@ contract Presale is IForwarder, AragonApp {
     }
 
     function start() public auth(START_ROLE) {
-        require(currentSaleState == SaleState.Pending, ERROR_INVALID_STATE);
+        require(currentSaleState() == SaleState.Pending, ERROR_INVALID_STATE);
         startDate = getTimestamp64();
-        _updateState(SaleState.Funding);
     }
 
-    function buy(uint256 _daiToSpend) public updatesState auth(BUY_ROLE) returns (uint256) {
-        require(currentSaleState == SaleState.Funding, ERROR_INVALID_STATE);
+    function buy(uint256 _daiToSpend) public auth(BUY_ROLE) returns (uint256) {
+        require(currentSaleState() == SaleState.Funding, ERROR_INVALID_STATE);
         require(daiToken.balanceOf(msg.sender) >= _daiToSpend, ERROR_INSUFFICIENT_DAI);
         require(daiToken.allowance(msg.sender, address(this)) >= _daiToSpend, ERROR_INSUFFICIENT_DAI_ALLOWANCE);
 
@@ -140,8 +142,8 @@ contract Presale is IForwarder, AragonApp {
         return purchaseId;
     }
 
-    function refund(address _buyer, uint256 _purchaseId) public updatesState {
-        require(currentSaleState == SaleState.Refunding, ERROR_INVALID_STATE);
+    function refund(address _buyer, uint256 _purchaseId) public {
+        require(currentSaleState() == SaleState.Refunding, ERROR_INVALID_STATE);
 
         uint256 daiToRefund = purchases[_buyer][_purchaseId];
         require(daiToRefund > 0, ERROR_NOTHING_TO_REFUND);
@@ -154,8 +156,8 @@ contract Presale is IForwarder, AragonApp {
         projectTokenManager.burn(address(this), tokensSold);
     }
 
-    function close() public updatesState {
-        require(currentSaleState == SaleState.Closed, ERROR_INVALID_STATE);
+    function close() public {
+        require(currentSaleState() == SaleState.Closed, ERROR_INVALID_STATE);
         // TODO
     }
 
@@ -175,13 +177,6 @@ contract Presale is IForwarder, AragonApp {
     function canForward(address _sender, bytes) public view returns (bool) {
         // TODO
         return true;
-    }
-
-    function _updateState(SaleState _newState) private {
-        if (_newState != currentSaleState) {
-            currentSaleState = _newState;
-            emit SaleStateChanged(_newState);
-        }
     }
 
     function _timeSinceFundingStarted() private returns (uint64) {

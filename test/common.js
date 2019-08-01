@@ -1,4 +1,4 @@
-const Presale = artifacts.require('Presale.sol');
+const Presale = artifacts.require('PresaleMock.sol');
 const MiniMeToken = artifacts.require('@aragon/apps-shared-minime/contracts/MiniMeToken')
 const TokenManager = artifacts.require('TokenManager.sol');
 const DAOFactory = artifacts.require('@aragon/core/contracts/factory/DAOFactory');
@@ -9,7 +9,7 @@ const ERC20 = artifacts.require('@aragon/core/contracts/lib/token/ERC20');
 const getContract = name => artifacts.require(name);
 
 const NOW = new Date().getTime() / 1000;
-const HOURS = 3600;
+const DAYS = 24 * 3600;
 
 const common = {
 
@@ -18,11 +18,12 @@ const common = {
   ANY_ADDRESS: '0xffffffffffffffffffffffffffffffffffffffff',
   ZERO_ADDRESS: '0x0000000000000000000000000000000000000000',
 
-  VESTING_CLIFF_DATE: NOW + 24 * HOURS,
-  VESTING_COMPLETE_DATE: NOW + 72 * HOURS,
+  VESTING_CLIFF_DATE: NOW + 90 * DAYS,
+  VESTING_COMPLETE_DATE: NOW + 360 * DAYS,
   DAI_FUNDING_GOAL: 20000,
   PERCENT_SUPPLY_OFFERED: 90,
   CONNECTOR_WEIGHT: 0.1,
+  FUNDING_PERIOD: 14 * DAYS,
 
   expectedDaiToProjectTokenMultiplier: () => {
     return Math.floor(
@@ -163,7 +164,8 @@ const common = {
       common.VESTING_CLIFF_DATE,
       common.VESTING_COMPLETE_DATE,
       common.DAI_FUNDING_GOAL,
-      common.PERCENT_SUPPLY_OFFERED
+      common.PERCENT_SUPPLY_OFFERED,
+      common.FUNDING_PERIOD
     );
   },
 
