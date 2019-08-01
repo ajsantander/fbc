@@ -6,7 +6,7 @@ const {
   VESTING_COMPLETE_DATE,
   SALE_STATE,
   CONNECTOR_WEIGHT,
-  expectedDaiToProjectTokenMultiplier,
+  daiToProjectTokenMultiplier,
 } = require('./common.js');
 const { assertRevert } = require('@aragon/test-helpers/assertThrow');
 
@@ -51,7 +51,7 @@ contract('Setup', ([anyone, appManager]) => {
 
     it('Exchange rate is calculated to the expected value', async () => {
       const receivedValue = (await this.app.daiToProjectTokenMultiplier()).toNumber();
-      expect(receivedValue).to.equal(expectedDaiToProjectTokenMultiplier());
+      expect(receivedValue).to.equal(daiToProjectTokenMultiplier());
     });
   });
 });

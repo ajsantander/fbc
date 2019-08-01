@@ -25,7 +25,11 @@ const common = {
   CONNECTOR_WEIGHT: 0.1,
   FUNDING_PERIOD: 14 * DAYS,
 
-  expectedDaiToProjectTokenMultiplier: () => {
+  daiToProjectTokens: (dai) => {
+    return dai * common.daiToProjectTokenMultiplier()
+  },
+
+  daiToProjectTokenMultiplier: () => {
     return Math.floor(
       (common.DAI_FUNDING_GOAL / common.CONNECTOR_WEIGHT) / common.PERCENT_SUPPLY_OFFERED
     )
@@ -73,6 +77,8 @@ const common = {
     const appBase = await TokenManager.new();
     test.ISSUE_ROLE = await appBase.ISSUE_ROLE();
     test.ASSIGN_ROLE = await appBase.ASSIGN_ROLE();
+    test.REVOKE_VESTINGS_ROLE = await appBase.REVOKE_VESTINGS_ROLE();
+    test.BURN_ROLE = await appBase.BURN_ROLE();
 
     const daoInstanceReceipt = await test.dao.newAppInstance(
       '0x123',
@@ -85,6 +91,20 @@ const common = {
     const proxy = daoInstanceReceipt.logs.filter(l => l.event === 'NewAppProxy')[0].args.proxy;
     test.tokenManager = TokenManager.at(proxy);
 
+    await test.acl.createPermission(
+      common.ANY_ADDRESS,
+      test.tokenManager.address,
+      test.BURN_ROLE,
+      appManager,
+      { from: appManager }
+    );
+    await test.acl.createPermission(
+      common.ANY_ADDRESS,
+      test.tokenManager.address,
+      test.REVOKE_VESTINGS_ROLE,
+      appManager,
+      { from: appManager }
+    );
     await test.acl.createPermission(
       common.ANY_ADDRESS,
       test.tokenManager.address,

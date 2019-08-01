@@ -18,22 +18,16 @@ contract Presale is IForwarder, AragonApp {
     event SaleStateChanged(SaleState newState);
     event TokensPurchased(address indexed buyer, uint256 daiSpent, uint256 tokensPurchased);
 
-    string private constant ERROR_INVALID_STATE = "PREFUND_INVALID_STATE";
-    string private constant ERROR_CAN_NOT_FORWARD = "PREFUND_CAN_NOT_FORWARD";
-    string private constant ERROR_INSUFFICIENT_DAI_ALLOWANCE = "PREFUND_INSUFFICIENT_DAI_ALLOWANCE";
-    string private constant ERROR_INSUFFICIENT_DAI = "PREFUND_INSUFFICIENT_DAI";
-    string private constant ERROR_INVALID_TOKEN_CONTROLLER = "PREFUND_INVALID_TOKEN_CONTROLLER";
-    string private constant ERROR_NOTHING_TO_REFUND = "PREFUND_NOTHING_TO_REFUND";
+    string private constant ERROR_INVALID_STATE = "PRESALE_INVALID_STATE";
+    string private constant ERROR_CAN_NOT_FORWARD = "PRESALE_CAN_NOT_FORWARD";
+    string private constant ERROR_INSUFFICIENT_DAI_ALLOWANCE = "PRESALE_INSUFFICIENT_DAI_ALLOWANCE";
+    string private constant ERROR_INSUFFICIENT_DAI = "PRESALE_INSUFFICIENT_DAI";
+    string private constant ERROR_INVALID_TOKEN_CONTROLLER = "PRESALE_INVALID_TOKEN_CONTROLLER";
+    string private constant ERROR_NOTHING_TO_REFUND = "PRESALE_NOTHING_TO_REFUND";
+    string private constant ERROR_DAI_TRANSFER_REVERTED = "PRESALE_DAI_TRANSFER_REVERTED";
 
     bytes32 public constant START_ROLE = keccak256("START_ROLE");
     bytes32 public constant BUY_ROLE = keccak256("BUY_ROLE");
-
-    enum SaleState {
-        Pending,   // Sale is closed and waiting to be started.
-        Funding,   // Sale has started and contributors can purchase tokens.
-        Refunding, // Sale did not reach daiFundingGoal and contributors may retrieve their funds.
-        Closed     // Sale reached daiFundingGoal and the Fundraising app is ready to be initialized.
-    }
 
     ERC20 public daiToken;
     MiniMeToken public projectToken;
@@ -61,6 +55,13 @@ contract Presale is IForwarder, AragonApp {
      *      |                  purchaseId
      *      buyer
      */
+
+    enum SaleState {
+        Pending,   // Sale is closed and waiting to be started.
+        Funding,   // Sale has started and contributors can purchase tokens.
+        Refunding, // Sale did not reach daiFundingGoal and contributors may retrieve their funds.
+        Closed     // Sale reached daiFundingGoal and the Fundraising app is ready to be initialized.
+    }
 
     function currentSaleState() public view returns (SaleState) {
         if (startDate == 0) {
@@ -119,7 +120,7 @@ contract Presale is IForwarder, AragonApp {
         require(daiToken.balanceOf(msg.sender) >= _daiToSpend, ERROR_INSUFFICIENT_DAI);
         require(daiToken.allowance(msg.sender, address(this)) >= _daiToSpend, ERROR_INSUFFICIENT_DAI_ALLOWANCE);
 
-        daiToken.transferFrom(msg.sender, address(this), _daiToSpend);
+        require(daiToken.transferFrom(msg.sender, address(this), _daiToSpend), ERROR_DAI_TRANSFER_REVERTED);
 
         uint256 tokensToSell = daiToProjectTokens(_daiToSpend);
         // TODO: This assumes that msg.sender will not actually
@@ -147,13 +148,15 @@ contract Presale is IForwarder, AragonApp {
 
         uint256 daiToRefund = purchases[_buyer][_purchaseId];
         require(daiToRefund > 0, ERROR_NOTHING_TO_REFUND);
-        daiToken.transferFrom(address(this), _buyer, daiToRefund);
+
+        purchases[_buyer][_purchaseId] = 0;
+        require(daiToken.transfer(_buyer, daiToRefund), ERROR_DAI_TRANSFER_REVERTED);
 
         (uint256 tokensSold,,,,,) = projectTokenManager.getVesting(_buyer, _purchaseId);
         // TODO: This assumes that the buyer did not transfer any of the vested tokens,
         // because the sale doesn't allow any transfers before its end date
         projectTokenManager.revokeVesting(_buyer, _purchaseId);
-        projectTokenManager.burn(address(this), tokensSold);
+        projectTokenManager.burn(address(projectTokenManager), tokensSold);
     }
 
     function close() public {

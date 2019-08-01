@@ -2,7 +2,7 @@ const {
   defaultSetup,
   sendTransaction,
   SALE_STATE,
-  expectedDaiToProjectTokenMultiplier
+  daiToProjectTokens
 } = require('./common.js');
 const { assertRevert } = require('@aragon/test-helpers/assertThrow');
 
@@ -66,7 +66,7 @@ contract('Buy function', ([anyone, appManager, buyer1, buyer2]) => {
 
         it('A user can ask the app how many project tokens would be obtained from a given amount of dai', async () => {
           const amount = (await this.app.daiToProjectTokens(BUYER_1_DAI_BALANCE)).toNumber();
-          const expectedAmount = BUYER_1_DAI_BALANCE * expectedDaiToProjectTokenMultiplier()
+          const expectedAmount = daiToProjectTokens(BUYER_1_DAI_BALANCE)
           expect(amount).to.equal(expectedAmount)
         });
 
@@ -85,7 +85,7 @@ contract('Buy function', ([anyone, appManager, buyer1, buyer2]) => {
 
           it('Vested tokens are assigned to the buyer', async () => {
             const userBalance = (await this.projectToken.balanceOf(buyer1)).toNumber()
-            const expectedAmount = BUYER_1_DAI_BALANCE * expectedDaiToProjectTokenMultiplier()
+            const expectedAmount = daiToProjectTokens(BUYER_1_DAI_BALANCE)
             expect(userBalance).to.equal(expectedAmount)
           });
 
