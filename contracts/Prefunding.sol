@@ -18,11 +18,11 @@ contract Prefunding is IForwarder, AragonApp {
     event SaleStateChanged(SaleState newState);
     event ProjectTokensPurchased(address indexed owner, uint256 purchaseTokensSpent, uint256 projectTokensSold);
 
-    string private constant ERROR_INVALID_STATE = "INVALID_STATE";
-    string private constant ERROR_CAN_NOT_FORWARD = "CAN_NOT_FORWARD";
-    string private constant ERROR_INSUFFICIENT_ALLOWANCE = "INSUFFICIENT_ALLOWANCE";
-    string private constant ERROR_INSUFFICIENT_FUNDS = "INSUFFICIENT_FUNDS";
-    string private constant ERROR_INVALID_TOKEN_CONTROLLER = "INVALID_TOKEN_CONTROLLER";
+    string private constant ERROR_INVALID_STATE = "PREFUND_INVALID_STATE";
+    string private constant ERROR_CAN_NOT_FORWARD = "PREFUND_CAN_NOT_FORWARD";
+    string private constant ERROR_INSUFFICIENT_ALLOWANCE = "PREFUND_INSUFFICIENT_ALLOWANCE";
+    string private constant ERROR_INSUFFICIENT_FUNDS = "PREFUND_INSUFFICIENT_FUNDS";
+    string private constant ERROR_INVALID_TOKEN_CONTROLLER = "PREFUND_INVALID_TOKEN_CONTROLLER";
 
     bytes32 public constant START_ROLE = keccak256("START_ROLE");
     bytes32 public constant BUY_ROLE = keccak256("BUY_ROLE");
@@ -55,6 +55,15 @@ contract Prefunding is IForwarder, AragonApp {
     uint256 public constant PRECISION_MULTIPLIER = 10 ** 16;
     uint256 public constant CONNECTOR_WEIGHT_INV = 10;
 
+    struct Purchase {
+        uint256 purchaseTokensSpent;
+        uint256 projectTokensGiven;
+    }
+
+    // Tracks how many purchase tokens were spent per purchase.
+    mapping(address => mapping(uint256 => uint256)) spends;
+
+    // TODO: Rename to refreshState
     modifier validateState {
         if (_timeSinceFundingStarted() > fundingPeriod) {
             if (totalRaised < fundingGoal) {
@@ -103,14 +112,14 @@ contract Prefunding is IForwarder, AragonApp {
         _updateState(SaleState.Funding);
     }
 
-    function buy(uint256 _purchasingTokenAmountToSpend) public validateState auth(BUY_ROLE) {
+    function buy(uint256 _purchasingTokenAmountToSpend) public validateState auth(BUY_ROLE) returns (uint256) {
         require(currentSaleState == SaleState.Funding, ERROR_INVALID_STATE);
         require(purchasingToken.balanceOf(msg.sender) >= _purchasingTokenAmountToSpend, ERROR_INSUFFICIENT_FUNDS);
         require(purchasingToken.allowance(msg.sender, address(this)) >= _purchasingTokenAmountToSpend, ERROR_INSUFFICIENT_ALLOWANCE);
 
         // Calculate the amount of project tokens that will be sold
         // for the provided purchasing token amount.
-        // uint256 projectTokenAmountToSell = getProjectTokenAmount(_purchasingTokenAmountToSpend);
+        uint256 projectTokenAmountToSell = getProjectTokenAmount(_purchasingTokenAmountToSpend);
 
         // Transfer purchasingTokens to this contract.
         purchasingToken.transferFrom(msg.sender, address(this), _purchasingTokenAmountToSpend);
@@ -119,21 +128,41 @@ contract Prefunding is IForwarder, AragonApp {
         // TODO: This assumes that msg.sender will not actually
         // own the tokens before this sale ends. Make sure to validate that,
         // because it would represent a critical issue otherwise.
-        // projectTokenManager.assignVested(
-        //     msg.sender,
-        //     _projectTokenAmountToSell,
-        //     startDate,
-        //     vestingCliffDate,
-        //     vestingCompleteDate,
-        //     true /* revokable */
-        // );
+        projectTokenManager.issue(projectTokenAmountToSell);
+        uint256 vestingId = projectTokenManager.assignVested(
+            msg.sender,
+            projectTokenAmountToSell,
+            startDate,
+            vestingCliffDate,
+            vestingCompleteDate,
+            true /* revokable */
+        );
 
-        // emit ProjectTokensPurchased(msg.sender, _purchasingTokenAmountToSpend, projectTokenAmountToSell);
+        // Remember how many purchase tokens were spent by the buyer in this purchase.
+        spends[msg.sender][vestingId] = _purchasingTokenAmountToSpend;
+
+        emit ProjectTokensPurchased(msg.sender, _purchasingTokenAmountToSpend, projectTokenAmountToSell);
+
+        return vestingId;
     }
 
-    function refund() public validateState {
+    function refund(address _buyer, uint256 _vestingId) public validateState {
         require(currentSaleState == SaleState.Refunding, ERROR_INVALID_STATE);
-        // TODO
+
+        // Calculate how many purchase tokens to refund and project tokens to burn for the purchase being refunded.
+        uint256 amountToRefund = spends[_buyer][_vestingId];
+        (uint256 vestedAmount,,,,,) = projectTokenManager.getVesting(_buyer, _vestingId);
+
+        // Return the purchase tokens to the buyer.
+        purchasingToken.transferFrom(address(this), _buyer, amountToRefund);
+
+        // Revoke the vested project tokens.
+        // TODO: This assumes that the buyer did not transfer any of the vested tokens,
+        // because the sale doesn't allow any transfers before its end date
+        projectTokenManager.revokeVesting(_buyer, _vestingId);
+
+        // Burn the project tokens.
+        projectTokenManager.burn(address(this), vestedAmount);
     }
 
     function close() public validateState {

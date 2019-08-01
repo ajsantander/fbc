@@ -10,7 +10,7 @@ const INIFINITE_ALLOWANCE = 100000000000000000;
 
 const BUYER_1_PURCHASING_BALANCE = 100;
 
-contract('Buy function', ([anyone, appManager, buyer1, buyer2]) => {
+contract.only('Buy function', ([anyone, appManager, buyer1, buyer2]) => {
 
   before(() => defaultSetup(this, appManager));
 
@@ -77,10 +77,24 @@ contract('Buy function', ([anyone, appManager, buyer1, buyer2]) => {
           });
 
           it('The purchasing tokens are transferred from the user to the app', async () => {
-            const userBalance = await this.purchasingToken.balanceOf(buyer1);
-            const appBalance = await this.purchasingToken.balanceOf(this.app.address);
-            expect(userBalance.toNumber()).to.equal(0);
-            expect(appBalance.toNumber()).to.equal(BUYER_1_PURCHASING_BALANCE);
+            const userBalance = (await this.purchasingToken.balanceOf(buyer1)).toNumber()
+            const appBalance = (await this.purchasingToken.balanceOf(this.app.address)).toNumber()
+            expect(userBalance).to.equal(0)
+            expect(appBalance).to.equal(BUYER_1_PURCHASING_BALANCE)
+          })
+
+          it('Vested tokens are assigned to the buyer', async () => {
+            const userBalance = (await this.projectToken.balanceOf(buyer1)).toNumber()
+            const expectedAmount = BUYER_1_PURCHASING_BALANCE * expectedExchangeRate()
+            expect(userBalance).to.equal(expectedAmount)
+          });
+
+          it.skip('The purchase produces a valid vesting id for the buyer', async () => {
+            // TODO
+          });
+
+          it.skip('An event is emitted', async () => {
+            // TODO
           });
         });
       });

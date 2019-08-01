@@ -70,7 +70,8 @@ const common = {
   deployTokenManager: async (test, appManager) => {
 
     const appBase = await TokenManager.new();
-    // test.CREATE_PROPOSALS_ROLE            = await appBase.CREATE_PROPOSALS_ROLE();
+    test.ISSUE_ROLE = await appBase.ISSUE_ROLE();
+    test.ASSIGN_ROLE = await appBase.ASSIGN_ROLE();
 
     const daoInstanceReceipt = await test.dao.newAppInstance(
       '0x123',
@@ -83,13 +84,20 @@ const common = {
     const proxy = daoInstanceReceipt.logs.filter(l => l.event === 'NewAppProxy')[0].args.proxy;
     test.tokenManager = TokenManager.at(proxy);
 
-    // await test.acl.createPermission(
-    //   common.ANY_ADDRESS,
-    //   test.app.address,
-    //   test.CREATE_PROPOSALS_ROLE,
-    //   appManager,
-    //   { from: appManager }
-    // );
+    await test.acl.createPermission(
+      common.ANY_ADDRESS,
+      test.tokenManager.address,
+      test.ISSUE_ROLE,
+      appManager,
+      { from: appManager }
+    );
+    await test.acl.createPermission(
+      common.ANY_ADDRESS,
+      test.tokenManager.address,
+      test.ASSIGN_ROLE,
+      appManager,
+      { from: appManager }
+    );
   },
 
   deployApp: async (test, appManager) => {
