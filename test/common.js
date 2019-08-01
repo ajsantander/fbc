@@ -1,4 +1,4 @@
-const Prefunding = artifacts.require('Prefunding.sol');
+const Presale = artifacts.require('Presale.sol');
 const MiniMeToken = artifacts.require('@aragon/apps-shared-minime/contracts/MiniMeToken')
 const TokenManager = artifacts.require('TokenManager.sol');
 const DAOFactory = artifacts.require('@aragon/core/contracts/factory/DAOFactory');
@@ -13,20 +13,20 @@ const HOURS = 3600;
 
 const common = {
 
-  Prefunding,
+  Presale,
 
   ANY_ADDRESS: '0xffffffffffffffffffffffffffffffffffffffff',
   ZERO_ADDRESS: '0x0000000000000000000000000000000000000000',
 
   VESTING_CLIFF_DATE: NOW + 24 * HOURS,
   VESTING_COMPLETE_DATE: NOW + 72 * HOURS,
-  FUNDING_GOAL: 20000,
+  DAI_FUNDING_GOAL: 20000,
   PERCENT_SUPPLY_OFFERED: 90,
   CONNECTOR_WEIGHT: 0.1,
 
-  expectedExchangeRate: () => {
+  expectedDaiToProjectTokenMultiplier: () => {
     return Math.floor(
-      (common.FUNDING_GOAL / common.CONNECTOR_WEIGHT) / common.PERCENT_SUPPLY_OFFERED
+      (common.DAI_FUNDING_GOAL / common.CONNECTOR_WEIGHT) / common.PERCENT_SUPPLY_OFFERED
     )
   },
 
@@ -102,7 +102,7 @@ const common = {
 
   deployApp: async (test, appManager) => {
 
-    const appBase = await Prefunding.new();
+    const appBase = await Presale.new();
     test.START_ROLE = await appBase.START_ROLE();
     test.BUY_ROLE = await appBase.BUY_ROLE();
 
@@ -115,7 +115,7 @@ const common = {
     );
 
     const proxy = daoInstanceReceipt.logs.filter(l => l.event === 'NewAppProxy')[0].args.proxy;
-    test.app = Prefunding.at(proxy);
+    test.app = Presale.at(proxy);
 
     await test.acl.createPermission(
       appManager,
@@ -134,7 +134,7 @@ const common = {
   },
 
   deployTokens: async (test) => {
-    test.purchasingToken = await MiniMeToken.new(common.ZERO_ADDRESS, common.ZERO_ADDRESS, 0, 'DaiToken', 18, 'DAI', true);
+    test.daiToken = await MiniMeToken.new(common.ZERO_ADDRESS, common.ZERO_ADDRESS, 0, 'DaiToken', 18, 'DAI', true);
     test.projectToken = await MiniMeToken.new(common.ZERO_ADDRESS, common.ZERO_ADDRESS, 0, 'ProjectToken', 18, 'PRO', true);
   },
 
@@ -154,15 +154,15 @@ const common = {
       0 /* macAccountTokens (infinite if set to 0) */
     );
 
-    // Deploy Prefunding app.
+    // Deploy Presale app.
     await common.deployApp(test, managerAddress);
     await test.app.initialize(
-      test.purchasingToken.address,
+      test.daiToken.address,
       test.projectToken.address,
       test.tokenManager.address,
       common.VESTING_CLIFF_DATE,
       common.VESTING_COMPLETE_DATE,
-      common.FUNDING_GOAL,
+      common.DAI_FUNDING_GOAL,
       common.PERCENT_SUPPLY_OFFERED
     );
   },

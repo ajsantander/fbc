@@ -1,12 +1,12 @@
 const {
   defaultSetup,
-  FUNDING_GOAL,
+  DAI_FUNDING_GOAL,
   PERCENT_SUPPLY_OFFERED,
   VESTING_CLIFF_DATE,
   VESTING_COMPLETE_DATE,
   SALE_STATE,
   CONNECTOR_WEIGHT,
-  expectedExchangeRate,
+  expectedDaiToProjectTokenMultiplier,
 } = require('./common.js');
 const { assertRevert } = require('@aragon/test-helpers/assertThrow');
 
@@ -21,7 +21,7 @@ contract('Setup', ([anyone, appManager]) => {
     });
 
     it('Funding goal and percentage offered are set', async () => {
-      expect((await this.app.fundingGoal()).toNumber()).to.equal(FUNDING_GOAL);
+      expect((await this.app.daiFundingGoal()).toNumber()).to.equal(DAI_FUNDING_GOAL);
       expect((await this.app.percentSupplyOffered()).toNumber()).to.equal(PERCENT_SUPPLY_OFFERED);
     });
 
@@ -39,9 +39,9 @@ contract('Setup', ([anyone, appManager]) => {
       expect((await this.app.projectToken())).to.equal(this.projectToken.address);
     });
 
-    it('Purchasing token is deployed and set in the app', async () => {
-      expect(web3.isAddress(this.purchasingToken.address)).to.equal(true);
-      expect((await this.app.purchasingToken())).to.equal(this.purchasingToken.address);
+    it('Dai token is deployed and set in the app', async () => {
+      expect(web3.isAddress(this.daiToken.address)).to.equal(true);
+      expect((await this.app.daiToken())).to.equal(this.daiToken.address);
     });
 
     it('TokenManager is deployed, set in the app, and controls the project token', async () => {
@@ -50,10 +50,8 @@ contract('Setup', ([anyone, appManager]) => {
     });
 
     it('Exchange rate is calculated to the expected value', async () => {
-      const receivedValue = (await this.app.purchaseTokenExchangeRate()).toNumber();
-      expect(receivedValue).to.equal(expectedExchangeRate());
+      const receivedValue = (await this.app.daiToProjectTokenMultiplier()).toNumber();
+      expect(receivedValue).to.equal(expectedDaiToProjectTokenMultiplier());
     });
-
   });
-
 });

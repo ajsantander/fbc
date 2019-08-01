@@ -11,18 +11,19 @@ import "@aragon/apps-shared-minime/contracts/MiniMeToken.sol";
 import "@aragon/apps-token-manager/contracts/TokenManager.sol";
 
 
-contract Prefunding is IForwarder, AragonApp {
+contract Presale is IForwarder, AragonApp {
     using SafeMath for uint256;
     using SafeMath64 for uint64;
 
     event SaleStateChanged(SaleState newState);
-    event ProjectTokensPurchased(address indexed owner, uint256 purchaseTokensSpent, uint256 projectTokensSold);
+    event TokensPurchased(address indexed buyer, uint256 daiSpent, uint256 tokensPurchased);
 
     string private constant ERROR_INVALID_STATE = "PREFUND_INVALID_STATE";
     string private constant ERROR_CAN_NOT_FORWARD = "PREFUND_CAN_NOT_FORWARD";
-    string private constant ERROR_INSUFFICIENT_ALLOWANCE = "PREFUND_INSUFFICIENT_ALLOWANCE";
-    string private constant ERROR_INSUFFICIENT_FUNDS = "PREFUND_INSUFFICIENT_FUNDS";
+    string private constant ERROR_INSUFFICIENT_DAI_ALLOWANCE = "PREFUND_INSUFFICIENT_DAI_ALLOWANCE";
+    string private constant ERROR_INSUFFICIENT_DAI = "PREFUND_INSUFFICIENT_DAI";
     string private constant ERROR_INVALID_TOKEN_CONTROLLER = "PREFUND_INVALID_TOKEN_CONTROLLER";
+    string private constant ERROR_NOTHING_TO_REFUND = "PREFUND_NOTHING_TO_REFUND";
 
     bytes32 public constant START_ROLE = keccak256("START_ROLE");
     bytes32 public constant BUY_ROLE = keccak256("BUY_ROLE");
@@ -30,43 +31,42 @@ contract Prefunding is IForwarder, AragonApp {
     enum SaleState {
         Pending,   // Sale is closed and waiting to be started.
         Funding,   // Sale has started and contributors can purchase tokens.
-        Refunding, // Sale did not reach fundingGoal and contributors may retrieve their funds.
-        Closed     // Sale reached fundingGoal and the Fundraising app is ready to be initialized.
+        Refunding, // Sale did not reach daiFundingGoal and contributors may retrieve their funds.
+        Closed     // Sale reached daiFundingGoal and the Fundraising app is ready to be initialized.
     }
 
     SaleState public currentSaleState;
 
-    ERC20 public purchasingToken;
+    ERC20 public daiToken;
     MiniMeToken public projectToken;
     TokenManager public projectTokenManager;
 
     uint64 public startDate;
 
-    uint256 public totalRaised;
-    uint256 public fundingGoal;
+    uint256 public totalDaiRaised;
+    uint256 public daiFundingGoal;
     uint64 public fundingPeriod;
 
     uint64 public vestingCliffDate;
     uint64 public vestingCompleteDate;
 
     uint256 public percentSupplyOffered;
-    uint256 public purchaseTokenExchangeRate;
+    uint256 public daiToProjectTokenMultiplier;
 
     uint256 public constant PRECISION_MULTIPLIER = 10 ** 16;
     uint256 public constant CONNECTOR_WEIGHT_INV = 10;
 
-    struct Purchase {
-        uint256 purchaseTokensSpent;
-        uint256 projectTokensGiven;
-    }
+    // Keeps track of how much dai is spent, per purchase, per buyer.
+    mapping(address => mapping(uint256 => uint256)) purchases;
+    /*      |                  |          |
+     *      |                  |          daiSpent
+     *      |                  purchaseId
+     *      buyer
+     */
 
-    // Tracks how many purchase tokens were spent per purchase.
-    mapping(address => mapping(uint256 => uint256)) spends;
-
-    // TODO: Rename to refreshState
-    modifier validateState {
+    modifier updatesState {
         if (_timeSinceFundingStarted() > fundingPeriod) {
-            if (totalRaised < fundingGoal) {
+            if (totalDaiRaised < daiFundingGoal) {
                 _updateState(SaleState.Refunding);
             } else {
                 _updateState(SaleState.Closed);
@@ -76,12 +76,12 @@ contract Prefunding is IForwarder, AragonApp {
     }
 
     function initialize(
-        ERC20 _purchasingToken,
+        ERC20 _daiToken,
         MiniMeToken _projectToken,
         TokenManager _projectTokenManager,
         uint64 _vestingCliffDate,
         uint64 _vestingCompleteDate,
-        uint256 _fundingGoal,
+        uint256 _daiFundingGoal,
         uint256 _percentSupplyOffered
     )
         external
@@ -89,7 +89,7 @@ contract Prefunding is IForwarder, AragonApp {
     {
         initialized();
 
-        purchasingToken = _purchasingToken;
+        daiToken = _daiToken;
         _setProjectToken(_projectToken, _projectTokenManager);
 
         // TODO: Perform validations regarding vesting and prefunding dates.
@@ -100,7 +100,7 @@ contract Prefunding is IForwarder, AragonApp {
         vestingCompleteDate = _vestingCompleteDate;
 
         // TODO: Validate
-        fundingGoal = _fundingGoal;
+        daiFundingGoal = _daiFundingGoal;
         percentSupplyOffered = _percentSupplyOffered;
 
         _calculateExchangeRate();
@@ -112,67 +112,55 @@ contract Prefunding is IForwarder, AragonApp {
         _updateState(SaleState.Funding);
     }
 
-    function buy(uint256 _purchasingTokenAmountToSpend) public validateState auth(BUY_ROLE) returns (uint256) {
+    function buy(uint256 _daiToSpend) public updatesState auth(BUY_ROLE) returns (uint256) {
         require(currentSaleState == SaleState.Funding, ERROR_INVALID_STATE);
-        require(purchasingToken.balanceOf(msg.sender) >= _purchasingTokenAmountToSpend, ERROR_INSUFFICIENT_FUNDS);
-        require(purchasingToken.allowance(msg.sender, address(this)) >= _purchasingTokenAmountToSpend, ERROR_INSUFFICIENT_ALLOWANCE);
+        require(daiToken.balanceOf(msg.sender) >= _daiToSpend, ERROR_INSUFFICIENT_DAI);
+        require(daiToken.allowance(msg.sender, address(this)) >= _daiToSpend, ERROR_INSUFFICIENT_DAI_ALLOWANCE);
 
-        // Calculate the amount of project tokens that will be sold
-        // for the provided purchasing token amount.
-        uint256 projectTokenAmountToSell = getProjectTokenAmount(_purchasingTokenAmountToSpend);
+        daiToken.transferFrom(msg.sender, address(this), _daiToSpend);
 
-        // Transfer purchasingTokens to this contract.
-        purchasingToken.transferFrom(msg.sender, address(this), _purchasingTokenAmountToSpend);
-
-        // Transfer projectTokens to the sender (in vested form).
+        uint256 tokensToSell = daiToProjectTokens(_daiToSpend);
         // TODO: This assumes that msg.sender will not actually
         // own the tokens before this sale ends. Make sure to validate that,
         // because it would represent a critical issue otherwise.
-        projectTokenManager.issue(projectTokenAmountToSell);
-        uint256 vestingId = projectTokenManager.assignVested(
+        projectTokenManager.issue(tokensToSell);
+        uint256 purchaseId = projectTokenManager.assignVested(
             msg.sender,
-            projectTokenAmountToSell,
+            tokensToSell,
             startDate,
             vestingCliffDate,
             vestingCompleteDate,
             true /* revokable */
         );
 
-        // Remember how many purchase tokens were spent by the buyer in this purchase.
-        spends[msg.sender][vestingId] = _purchasingTokenAmountToSpend;
+        purchases[msg.sender][purchaseId] = _daiToSpend;
 
-        emit ProjectTokensPurchased(msg.sender, _purchasingTokenAmountToSpend, projectTokenAmountToSell);
+        emit TokensPurchased(msg.sender, _daiToSpend, tokensToSell);
 
-        return vestingId;
+        return purchaseId;
     }
 
-    function refund(address _buyer, uint256 _vestingId) public validateState {
+    function refund(address _buyer, uint256 _purchaseId) public updatesState {
         require(currentSaleState == SaleState.Refunding, ERROR_INVALID_STATE);
 
-        // Calculate how many purchase tokens to refund and project tokens to burn for the purchase being refunded.
-        uint256 amountToRefund = spends[_buyer][_vestingId];
-        (uint256 vestedAmount,,,,,) = projectTokenManager.getVesting(_buyer, _vestingId);
+        uint256 daiToRefund = purchases[_buyer][_purchaseId];
+        require(daiToRefund > 0, ERROR_NOTHING_TO_REFUND);
+        daiToken.transferFrom(address(this), _buyer, daiToRefund);
 
-        // Return the purchase tokens to the buyer.
-        purchasingToken.transferFrom(address(this), _buyer, amountToRefund);
-
-        // Revoke the vested project tokens.
+        (uint256 tokensSold,,,,,) = projectTokenManager.getVesting(_buyer, _purchaseId);
         // TODO: This assumes that the buyer did not transfer any of the vested tokens,
         // because the sale doesn't allow any transfers before its end date
-        projectTokenManager.revokeVesting(_buyer, _vestingId);
-
-        // Burn the project tokens.
-        projectTokenManager.burn(address(this), vestedAmount);
+        projectTokenManager.revokeVesting(_buyer, _purchaseId);
+        projectTokenManager.burn(address(this), tokensSold);
     }
 
-    function close() public validateState {
+    function close() public updatesState {
         require(currentSaleState == SaleState.Closed, ERROR_INVALID_STATE);
         // TODO
     }
 
-    // TODO: This could have a better name.
-    function getProjectTokenAmount(uint256 _purchasingTokenAmountToSpend) public view returns (uint256) {
-        return _purchasingTokenAmountToSpend.mul(purchaseTokenExchangeRate);
+    function daiToProjectTokens(uint256 _daiAmount) public view returns (uint256) {
+        return _daiAmount.mul(daiToProjectTokenMultiplier);
     }
 
     function isForwarder() external pure returns (bool) {
@@ -205,10 +193,10 @@ contract Prefunding is IForwarder, AragonApp {
     }
 
     function _calculateExchangeRate() private {
-        uint256 exchangeRate = fundingGoal.mul(PRECISION_MULTIPLIER).div(CONNECTOR_WEIGHT_INV);
+        uint256 exchangeRate = daiFundingGoal.mul(PRECISION_MULTIPLIER).div(CONNECTOR_WEIGHT_INV);
         exchangeRate = exchangeRate.mul(100).div(percentSupplyOffered);
         exchangeRate = exchangeRate.div(PRECISION_MULTIPLIER);
-        purchaseTokenExchangeRate = exchangeRate;
+        daiToProjectTokenMultiplier = exchangeRate;
     }
 
     function _setProjectToken(MiniMeToken _projectToken, TokenManager _projectTokenManager) private {

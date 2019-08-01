@@ -2,15 +2,15 @@ const {
   defaultSetup,
   sendTransaction,
   SALE_STATE,
-  expectedExchangeRate
+  expectedDaiToProjectTokenMultiplier
 } = require('./common.js');
 const { assertRevert } = require('@aragon/test-helpers/assertThrow');
 
 const INIFINITE_ALLOWANCE = 100000000000000000;
 
-const BUYER_1_PURCHASING_BALANCE = 100;
+const BUYER_1_DAI_BALANCE = 100;
 
-contract.only('Buy function', ([anyone, appManager, buyer1, buyer2]) => {
+contract('Buy function', ([anyone, appManager, buyer1, buyer2]) => {
 
   before(() => defaultSetup(this, appManager));
 
@@ -28,25 +28,25 @@ contract.only('Buy function', ([anyone, appManager, buyer1, buyer2]) => {
 
   });
 
-  describe('When a user owns purchasing tokens', () => {
+  describe('When a user owns dai', () => {
 
     before(async () => {
-      await this.purchasingToken.generateTokens(buyer1, BUYER_1_PURCHASING_BALANCE);
+      await this.daiToken.generateTokens(buyer1, BUYER_1_DAI_BALANCE);
     });
 
     it('User owns such tokens', async () => {
-      const balance = await this.purchasingToken.balanceOf(buyer1);
-      expect(balance.toNumber()).to.equal(BUYER_1_PURCHASING_BALANCE);
+      const balance = await this.daiToken.balanceOf(buyer1);
+      expect(balance.toNumber()).to.equal(BUYER_1_DAI_BALANCE);
     });
 
-    describe('When a user provides allowance for the purchasing token to the app', () => {
+    describe('When a user provides allowance for dai to the app', () => {
 
       before(async () => {
-        await this.purchasingToken.approve(this.app.address, INIFINITE_ALLOWANCE, { from: buyer1 })
+        await this.daiToken.approve(this.app.address, INIFINITE_ALLOWANCE, { from: buyer1 })
       });
 
-      it('App should be allowed to transfer purchasing tokens', async () => {
-        const allowance = await this.purchasingToken.allowance(buyer1, this.app.address);
+      it('App should be allowed to transfer dai tokens', async () => {
+        const allowance = await this.daiToken.allowance(buyer1, this.app.address);
         expect(allowance.toNumber()).to.equal(INIFINITE_ALLOWANCE);
       });
 
@@ -64,32 +64,32 @@ contract.only('Buy function', ([anyone, appManager, buyer1, buyer2]) => {
           expect((await this.app.currentSaleState()).toNumber()).to.equal(SALE_STATE.FUNDING);
         });
 
-        it('A user can ask the app how many project tokens would be obtained from a given amount of purchasing tokens', async () => {
-          const amount = (await this.app.getProjectTokenAmount(BUYER_1_PURCHASING_BALANCE)).toNumber();
-          const expectedAmount = BUYER_1_PURCHASING_BALANCE * expectedExchangeRate()
+        it('A user can ask the app how many project tokens would be obtained from a given amount of dai', async () => {
+          const amount = (await this.app.daiToProjectTokens(BUYER_1_DAI_BALANCE)).toNumber();
+          const expectedAmount = BUYER_1_DAI_BALANCE * expectedDaiToProjectTokenMultiplier()
           expect(amount).to.equal(expectedAmount)
         });
 
         describe('When a user buys project tokens', () => {
 
           before(async () => {
-            await this.app.buy(BUYER_1_PURCHASING_BALANCE, { from: buyer1 });
+            await this.app.buy(BUYER_1_DAI_BALANCE, { from: buyer1 });
           });
 
-          it('The purchasing tokens are transferred from the user to the app', async () => {
-            const userBalance = (await this.purchasingToken.balanceOf(buyer1)).toNumber()
-            const appBalance = (await this.purchasingToken.balanceOf(this.app.address)).toNumber()
+          it('The dai are transferred from the user to the app', async () => {
+            const userBalance = (await this.daiToken.balanceOf(buyer1)).toNumber()
+            const appBalance = (await this.daiToken.balanceOf(this.app.address)).toNumber()
             expect(userBalance).to.equal(0)
-            expect(appBalance).to.equal(BUYER_1_PURCHASING_BALANCE)
+            expect(appBalance).to.equal(BUYER_1_DAI_BALANCE)
           })
 
           it('Vested tokens are assigned to the buyer', async () => {
             const userBalance = (await this.projectToken.balanceOf(buyer1)).toNumber()
-            const expectedAmount = BUYER_1_PURCHASING_BALANCE * expectedExchangeRate()
+            const expectedAmount = BUYER_1_DAI_BALANCE * expectedDaiToProjectTokenMultiplier()
             expect(userBalance).to.equal(expectedAmount)
           });
 
-          it.skip('The purchase produces a valid vesting id for the buyer', async () => {
+          it.skip('The purchase produces a valid purchase id for the buyer', async () => {
             // TODO
           });
 
