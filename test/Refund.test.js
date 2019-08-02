@@ -18,25 +18,25 @@ contract('Refund', ([anyone, appManager, buyer1, buyer2, buyer3]) => {
       await this.daiToken.generateTokens(buyer2, BUYERS_DAI_BALANCE)
       await this.daiToken.generateTokens(buyer3, BUYERS_DAI_BALANCE)
 
-      await this.daiToken.approve(this.app.address, BUYERS_DAI_BALANCE, { from: buyer1 })
-      await this.daiToken.approve(this.app.address, BUYERS_DAI_BALANCE, { from: buyer2 })
-      await this.daiToken.approve(this.app.address, BUYERS_DAI_BALANCE, { from: buyer3 })
+      await this.daiToken.approve(this.presale.address, BUYERS_DAI_BALANCE, { from: buyer1 })
+      await this.daiToken.approve(this.presale.address, BUYERS_DAI_BALANCE, { from: buyer2 })
+      await this.daiToken.approve(this.presale.address, BUYERS_DAI_BALANCE, { from: buyer3 })
 
-      await this.app.start({ from: appManager })
+      await this.presale.start({ from: appManager })
 
       // Make a few purchases, careful not to reach the funding goal.
-      await this.app.buy(BUYERS_DAI_BALANCE, {  from: buyer1 }) // Spends everything in one purchase
-      await this.app.buy(BUYERS_DAI_BALANCE / 2, {  from: buyer2 })
-      await this.app.buy(BUYERS_DAI_BALANCE / 2, {  from: buyer2 }) // Spends everything in two purchases
-      await this.app.buy(BUYERS_DAI_BALANCE / 2, {  from: buyer3 }) // Spends half
+      await this.presale.buy(BUYERS_DAI_BALANCE, {  from: buyer1 }) // Spends everything in one purchase
+      await this.presale.buy(BUYERS_DAI_BALANCE / 2, {  from: buyer2 })
+      await this.presale.buy(BUYERS_DAI_BALANCE / 2, {  from: buyer2 }) // Spends everything in two purchases
+      await this.presale.buy(BUYERS_DAI_BALANCE / 2, {  from: buyer3 }) // Spends half
 
-      await this.app.mockIncreaseTime(FUNDING_PERIOD)
+      await this.presale.mockIncreaseTime(FUNDING_PERIOD)
     })
 
     // TODO: Test invalid attempts to get refunded before the sale closes
 
     it('Sale state is Refunding', async () => {
-      expect((await this.app.currentSaleState()).toNumber()).to.equal(SALE_STATE.REFUNDING)
+      expect((await this.presale.currentSaleState()).toNumber()).to.equal(SALE_STATE.REFUNDING)
     })
 
     it('Provided buyers with project tokens, at the expense of dai', async () => {
@@ -49,7 +49,7 @@ contract('Refund', ([anyone, appManager, buyer1, buyer2, buyer3]) => {
     })
 
     it('Allows a buyer who made a single purchase to get refunded', async () => {
-      await this.app.refund(buyer1, 0)
+      await this.presale.refund(buyer1, 0)
       expect((await this.daiToken.balanceOf(buyer1)).toNumber()).to.equal(BUYERS_DAI_BALANCE)
       expect((await this.projectToken.balanceOf(buyer1)).toNumber()).to.equal(0)
     })

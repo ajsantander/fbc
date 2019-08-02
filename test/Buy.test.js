@@ -18,7 +18,7 @@ contract('Buy', ([anyone, appManager, buyer]) => {
       await assertRevert(
         sendTransaction({
           from: anyone,
-          to: this.app.address,
+          to: this.presale.address,
           value: web3.toWei(1, 'ether')
         })
       )
@@ -30,7 +30,7 @@ contract('Buy', ([anyone, appManager, buyer]) => {
 
     before(async () => {
       await this.daiToken.generateTokens(buyer, BUYER_DAI_BALANCE)
-      await this.daiToken.approve(this.app.address, INIFINITE_ALLOWANCE, { from: buyer })
+      await this.daiToken.approve(this.presale.address, INIFINITE_ALLOWANCE, { from: buyer })
     })
 
     it.skip('Reverts if the user attempts to buy tokens before the sale has started', async () => {
@@ -40,15 +40,15 @@ contract('Buy', ([anyone, appManager, buyer]) => {
     describe('When the sale has started', () => {
 
       before(async () => {
-        await this.app.start({ from: appManager })
+        await this.presale.start({ from: appManager })
       })
 
       it('App state should be Funding', async () => {
-        expect((await this.app.currentSaleState()).toNumber()).to.equal(SALE_STATE.FUNDING)
+        expect((await this.presale.currentSaleState()).toNumber()).to.equal(SALE_STATE.FUNDING)
       })
 
       it('A user can ask the app how many project tokens would be obtained from a given amount of dai', async () => {
-        const amount = (await this.app.daiToProjectTokens(BUYER_DAI_BALANCE)).toNumber()
+        const amount = (await this.presale.daiToProjectTokens(BUYER_DAI_BALANCE)).toNumber()
         const expectedAmount = daiToProjectTokens(BUYER_DAI_BALANCE)
         expect(amount).to.equal(expectedAmount)
       })
@@ -56,12 +56,12 @@ contract('Buy', ([anyone, appManager, buyer]) => {
       describe('When a user buys project tokens', () => {
 
         before(async () => {
-          await this.app.buy(BUYER_DAI_BALANCE, { from: buyer })
+          await this.presale.buy(BUYER_DAI_BALANCE, { from: buyer })
         })
 
         it('The dai are transferred from the user to the app', async () => {
           const userBalance = (await this.daiToken.balanceOf(buyer)).toNumber()
-          const appBalance = (await this.daiToken.balanceOf(this.app.address)).toNumber()
+          const appBalance = (await this.daiToken.balanceOf(this.presale.address)).toNumber()
           expect(userBalance).to.equal(0)
           expect(appBalance).to.equal(BUYER_DAI_BALANCE)
         })
