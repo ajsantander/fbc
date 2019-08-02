@@ -1,4 +1,5 @@
 const Presale = artifacts.require('PresaleMock.sol');
+const FundraisingController = artifacts.require('FundraisingMock.sol');
 const MiniMeToken = artifacts.require('@aragon/apps-shared-minime/contracts/MiniMeToken')
 const TokenManager = artifacts.require('TokenManager.sol');
 const DAOFactory = artifacts.require('@aragon/core/contracts/factory/DAOFactory');
@@ -24,6 +25,7 @@ const common = {
   PERCENT_SUPPLY_OFFERED: 90,
   CONNECTOR_WEIGHT: 0.1,
   FUNDING_PERIOD: 14 * DAYS,
+  TAP_RATE: 5000,
 
   daiToProjectTokens: (dai) => {
     return dai * common.daiToProjectTokenMultiplier()
@@ -159,6 +161,10 @@ const common = {
     test.projectToken = await MiniMeToken.new(common.ZERO_ADDRESS, common.ZERO_ADDRESS, 0, 'ProjectToken', 18, 'PRO', true);
   },
 
+  deployFundraisingController: async (test) => {
+    test.fundraisingController = await FundraisingController.new()
+  },
+
   defaultSetup: async (test, managerAddress) => {
 
     // Deploy DAO.
@@ -175,6 +181,9 @@ const common = {
       0 /* macAccountTokens (infinite if set to 0) */
     );
 
+    // Deploy Fundraising app (dummy for now).
+    await common.deployFundraisingController(test)
+
     // Deploy Presale app.
     await common.deployApp(test, managerAddress);
     await test.app.initialize(
@@ -185,7 +194,10 @@ const common = {
       common.VESTING_COMPLETE_DATE,
       common.DAI_FUNDING_GOAL,
       common.PERCENT_SUPPLY_OFFERED,
-      common.FUNDING_PERIOD
+      common.FUNDING_PERIOD,
+      managerAddress, /* fundraisingPool */
+      test.fundraisingController.address,
+      common.TAP_RATE
     );
   },
 

@@ -53,5 +53,9 @@ contract('Setup', ([anyone, appManager]) => {
       const receivedValue = (await this.app.daiToProjectTokenMultiplier()).toNumber();
       expect(receivedValue).to.equal(daiToProjectTokenMultiplier());
     });
+
+    it.skip('Fundraising controller and parameters are set up correctly', async () => {
+      // TODO
+    })
   });
 });

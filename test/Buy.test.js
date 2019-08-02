@@ -6,11 +6,10 @@ const {
 } = require('./common.js');
 const { assertRevert } = require('@aragon/test-helpers/assertThrow');
 
+const BUYER_DAI_BALANCE = 100;
 const INIFINITE_ALLOWANCE = 100000000000000000;
 
-const BUYER_1_DAI_BALANCE = 100;
-
-contract('Buy function', ([anyone, appManager, buyer1, buyer2]) => {
+contract('Buy', ([anyone, appManager, buyer]) => {
 
   before(() => defaultSetup(this, appManager));
 
@@ -28,76 +27,60 @@ contract('Buy function', ([anyone, appManager, buyer1, buyer2]) => {
 
   });
 
-  describe('When a user owns dai', () => {
+  describe('When using dai', () => {
 
     before(async () => {
-      await this.daiToken.generateTokens(buyer1, BUYER_1_DAI_BALANCE);
+      await this.daiToken.generateTokens(buyer, BUYER_DAI_BALANCE);
+      await this.daiToken.approve(this.app.address, INIFINITE_ALLOWANCE, { from: buyer })
     });
 
-    it('User owns such tokens', async () => {
-      const balance = await this.daiToken.balanceOf(buyer1);
-      expect(balance.toNumber()).to.equal(BUYER_1_DAI_BALANCE);
+    it.skip('Reverts if the user attempts to buy tokens before the sale has started', async () => {
+      // TODO
     });
 
-    describe('When a user provides allowance for dai to the app', () => {
+    describe('When the sale has started', () => {
 
       before(async () => {
-        await this.daiToken.approve(this.app.address, INIFINITE_ALLOWANCE, { from: buyer1 })
+        await this.app.start({ from: appManager });
       });
 
-      it('App should be allowed to transfer dai tokens', async () => {
-        const allowance = await this.daiToken.allowance(buyer1, this.app.address);
-        expect(allowance.toNumber()).to.equal(INIFINITE_ALLOWANCE);
+      it('App state should be Funding', async () => {
+        expect((await this.app.currentSaleState()).toNumber()).to.equal(SALE_STATE.FUNDING);
       });
 
-      it.skip('Reverts if the user attempts to buy tokens before the sale has started', async () => {
-        // TODO
+      it('A user can ask the app how many project tokens would be obtained from a given amount of dai', async () => {
+        const amount = (await this.app.daiToProjectTokens(BUYER_DAI_BALANCE)).toNumber();
+        const expectedAmount = daiToProjectTokens(BUYER_DAI_BALANCE)
+        expect(amount).to.equal(expectedAmount)
       });
 
-      describe('When the sale has started', () => {
+      describe('When a user buys project tokens', () => {
 
         before(async () => {
-          await this.app.start({ from: appManager });
+          await this.app.buy(BUYER_DAI_BALANCE, { from: buyer });
         });
 
-        it('App state should be Funding', async () => {
-          expect((await this.app.currentSaleState()).toNumber()).to.equal(SALE_STATE.FUNDING);
+        it('The dai are transferred from the user to the app', async () => {
+          const userBalance = (await this.daiToken.balanceOf(buyer)).toNumber()
+          const appBalance = (await this.daiToken.balanceOf(this.app.address)).toNumber()
+          expect(userBalance).to.equal(0)
+          expect(appBalance).to.equal(BUYER_DAI_BALANCE)
+        })
+
+        it('Vested tokens are assigned to the buyer', async () => {
+          const userBalance = (await this.projectToken.balanceOf(buyer)).toNumber()
+          const expectedAmount = daiToProjectTokens(BUYER_DAI_BALANCE)
+          expect(userBalance).to.equal(expectedAmount)
         });
 
-        it('A user can ask the app how many project tokens would be obtained from a given amount of dai', async () => {
-          const amount = (await this.app.daiToProjectTokens(BUYER_1_DAI_BALANCE)).toNumber();
-          const expectedAmount = daiToProjectTokens(BUYER_1_DAI_BALANCE)
-          expect(amount).to.equal(expectedAmount)
+        it.skip('The purchase produces a valid purchase id for the buyer', async () => {
+          // TODO
         });
 
-        describe('When a user buys project tokens', () => {
-
-          before(async () => {
-            await this.app.buy(BUYER_1_DAI_BALANCE, { from: buyer1 });
-          });
-
-          it('The dai are transferred from the user to the app', async () => {
-            const userBalance = (await this.daiToken.balanceOf(buyer1)).toNumber()
-            const appBalance = (await this.daiToken.balanceOf(this.app.address)).toNumber()
-            expect(userBalance).to.equal(0)
-            expect(appBalance).to.equal(BUYER_1_DAI_BALANCE)
-          })
-
-          it('Vested tokens are assigned to the buyer', async () => {
-            const userBalance = (await this.projectToken.balanceOf(buyer1)).toNumber()
-            const expectedAmount = daiToProjectTokens(BUYER_1_DAI_BALANCE)
-            expect(userBalance).to.equal(expectedAmount)
-          });
-
-          it.skip('The purchase produces a valid purchase id for the buyer', async () => {
-            // TODO
-          });
-
-          it.skip('An event is emitted', async () => {
-            // TODO
-          });
-        });
-      });
-    });
-  });
-});
+        it.skip('An event is emitted', async () => {
+          // TODO
+        })
+      })
+    })
+  })
+})

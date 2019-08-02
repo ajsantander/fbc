@@ -10,6 +10,8 @@ import "@aragon/os/contracts/lib/token/ERC20.sol";
 import "@aragon/apps-shared-minime/contracts/MiniMeToken.sol";
 import "@aragon/apps-token-manager/contracts/TokenManager.sol";
 
+import "./test/mocks/FundraisingMock.sol";
+
 
 contract Presale is IForwarder, AragonApp {
     using SafeMath for uint256;
@@ -39,6 +41,10 @@ contract Presale is IForwarder, AragonApp {
     uint256 public daiFundingGoal;
     uint64 public fundingPeriod;
 
+    FundraisingMock fundraisingController;
+    address public fundraisingPool;
+    uint256 tapRate;
+
     uint64 public vestingCliffDate;
     uint64 public vestingCompleteDate;
 
@@ -46,7 +52,7 @@ contract Presale is IForwarder, AragonApp {
     uint256 public daiToProjectTokenMultiplier;
 
     uint256 public constant PRECISION_MULTIPLIER = 10 ** 16;
-    uint256 public constant CONNECTOR_WEIGHT_INV = 10;
+    uint32 public constant CONNECTOR_WEIGHT_INV = 10;
 
     // Keeps track of how much dai is spent, per purchase, per buyer.
     mapping(address => mapping(uint256 => uint256)) purchases;
@@ -63,19 +69,9 @@ contract Presale is IForwarder, AragonApp {
         Closed     // Sale reached daiFundingGoal and the Fundraising app is ready to be initialized.
     }
 
-    function currentSaleState() public view returns (SaleState) {
-        if (startDate == 0) {
-            return SaleState.Pending;
-        } else if (_timeSinceFundingStarted() < fundingPeriod) {
-            return SaleState.Funding;
-        } else {
-            if (totalDaiRaised < daiFundingGoal) {
-                return SaleState.Refunding;
-            } else {
-                return SaleState.Closed;
-            }
-        }
-    }
+    /*
+     * Initialization
+     */
 
     function initialize(
         ERC20 _daiToken,
@@ -85,7 +81,10 @@ contract Presale is IForwarder, AragonApp {
         uint64 _vestingCompleteDate,
         uint256 _daiFundingGoal,
         uint256 _percentSupplyOffered,
-        uint64 _fundingPeriod
+        uint64 _fundingPeriod,
+        address _fundraisingPool,
+        FundraisingMock _fundraisingController,
+        uint256 _tapRate
     )
         external
         onlyInit
@@ -94,6 +93,11 @@ contract Presale is IForwarder, AragonApp {
 
         daiToken = _daiToken;
         _setProjectToken(_projectToken, _projectTokenManager);
+
+        // TODO: Verify
+        fundraisingController = _fundraisingController;
+        fundraisingPool = _fundraisingPool;
+        tapRate = _tapRate;
 
         // TODO: Perform validations regarding vesting and prefunding dates.
         // EG: Verify that versting cliff > sale period, otherwise
@@ -109,6 +113,10 @@ contract Presale is IForwarder, AragonApp {
 
         _calculateExchangeRate();
     }
+
+    /*
+     * Public interface
+     */
 
     function start() public auth(START_ROLE) {
         require(currentSaleState() == SaleState.Pending, ERROR_INVALID_STATE);
@@ -136,6 +144,7 @@ contract Presale is IForwarder, AragonApp {
             true /* revokable */
         );
 
+        totalDaiRaised = totalDaiRaised.add(_daiToSpend);
         purchases[msg.sender][purchaseId] = _daiToSpend;
 
         emit TokensPurchased(msg.sender, _daiToSpend, tokensToSell);
@@ -161,12 +170,43 @@ contract Presale is IForwarder, AragonApp {
 
     function close() public {
         require(currentSaleState() == SaleState.Closed, ERROR_INVALID_STATE);
-        // TODO
+
+        require(daiToken.transfer(fundraisingPool, totalDaiRaised), ERROR_DAI_TRANSFER_REVERTED);
+
+        fundraisingController.addCollateralToken(
+            daiToken,
+            0,
+            0,
+            CONNECTOR_WEIGHT_INV,
+            tapRate
+        );
     }
+
+    /*
+     * Getters
+     */
 
     function daiToProjectTokens(uint256 _daiAmount) public view returns (uint256) {
         return _daiAmount.mul(daiToProjectTokenMultiplier);
     }
+
+    function currentSaleState() public view returns (SaleState) {
+        if (startDate == 0) {
+            return SaleState.Pending;
+        } else if (_timeSinceFundingStarted() < fundingPeriod) {
+            return SaleState.Funding;
+        } else {
+            if (totalDaiRaised < daiFundingGoal) {
+                return SaleState.Refunding;
+            } else {
+                return SaleState.Closed;
+            }
+        }
+    }
+
+    /*
+     * IForwarder interface implementation
+     */
 
     function isForwarder() external pure returns (bool) {
         return true;
@@ -182,6 +222,10 @@ contract Presale is IForwarder, AragonApp {
         return true;
     }
 
+    /*
+     * Internal
+     */
+
     function _timeSinceFundingStarted() private returns (uint64) {
         if (startDate == 0) {
             return 0;
@@ -191,7 +235,8 @@ contract Presale is IForwarder, AragonApp {
     }
 
     function _calculateExchangeRate() private {
-        uint256 exchangeRate = daiFundingGoal.mul(PRECISION_MULTIPLIER).div(CONNECTOR_WEIGHT_INV);
+        uint256 connectorWeightInv = uint256(CONNECTOR_WEIGHT_INV);
+        uint256 exchangeRate = daiFundingGoal.mul(PRECISION_MULTIPLIER).div(connectorWeightInv);
         exchangeRate = exchangeRate.mul(100).div(percentSupplyOffered);
         exchangeRate = exchangeRate.div(PRECISION_MULTIPLIER);
         daiToProjectTokenMultiplier = exchangeRate;

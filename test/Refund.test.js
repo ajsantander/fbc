@@ -5,7 +5,7 @@ const {
   daiToProjectTokens
 } = require('./common.js')
 
-const BUYERS_DAI_BALANCE = 10000
+const BUYERS_DAI_BALANCE = 1000
 const INIFINITE_ALLOWANCE = 100000000000000000
 
 contract('Refund', ([anyone, appManager, buyer1, buyer2, buyer3]) => {
@@ -25,6 +25,7 @@ contract('Refund', ([anyone, appManager, buyer1, buyer2, buyer3]) => {
 
       await this.app.start({ from: appManager })
 
+      // Make a few purchases, careful not to reach the funding goal.
       await this.app.buy(BUYERS_DAI_BALANCE, {  from: buyer1 }) // Spends everything in one purchase
       await this.app.buy(BUYERS_DAI_BALANCE / 2, {  from: buyer2 })
       await this.app.buy(BUYERS_DAI_BALANCE / 2, {  from: buyer2 }) // Spends everything in two purchases
