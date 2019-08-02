@@ -1,24 +1,22 @@
-const FundraisingController = artifacts.require('FundraisingMock.sol');
-
 const {
-  defaultSetup,
   FUNDING_PERIOD,
   SALE_STATE,
   CONNECTOR_WEIGHT,
   TAP_RATE
-} = require('./common.js')
+} = require('./common/constants')
+const { deployDefaultSetup } = require('./common/deploy')
+const FundraisingController = artifacts.require('FundraisingMock.sol')
 
 const BUYERS_DAI_BALANCE = 20000
-const INIFINITE_ALLOWANCE = 100000000000000000
 
 contract('Close', ([anyone, appManager, buyer1]) => {
 
   describe('When purchases have been made and the sale is Closed', () => {
 
     before(async () => {
-      await defaultSetup(this, appManager)
+      await deployDefaultSetup(this, appManager)
       await this.daiToken.generateTokens(buyer1, BUYERS_DAI_BALANCE)
-      await this.daiToken.approve(this.app.address, INIFINITE_ALLOWANCE, { from: buyer1 })
+      await this.daiToken.approve(this.app.address, BUYERS_DAI_BALANCE, { from: buyer1 })
       await this.app.start({ from: appManager })
 
       // Make a single purchase that reaches the funding goal
@@ -29,7 +27,7 @@ contract('Close', ([anyone, appManager, buyer1]) => {
     })
 
     it('Sale state is Closed', async () => {
-      expect((await this.app.currentSaleState()).toNumber()).to.equal(SALE_STATE.CLOSED);
+      expect((await this.app.currentSaleState()).toNumber()).to.equal(SALE_STATE.CLOSED)
     })
 
     it('Raised funds are transferred to the fundraising pool', async () => {
@@ -48,4 +46,4 @@ contract('Close', ([anyone, appManager, buyer1]) => {
     })
 
   })
-});
+})

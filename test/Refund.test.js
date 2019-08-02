@@ -1,27 +1,26 @@
 const {
-  defaultSetup,
   FUNDING_PERIOD,
-  SALE_STATE,
-  daiToProjectTokens
-} = require('./common.js')
+  SALE_STATE
+} = require('./common/constants')
+const { daiToProjectTokens } = require('./common/utils')
+const { deployDefaultSetup } = require('./common/deploy')
 
 const BUYERS_DAI_BALANCE = 1000
-const INIFINITE_ALLOWANCE = 100000000000000000
 
 contract('Refund', ([anyone, appManager, buyer1, buyer2, buyer3]) => {
 
   describe('When purchases have been made and the sale is Refunding', () => {
 
     before(async () => {
-      await defaultSetup(this, appManager)
+      await deployDefaultSetup(this, appManager)
 
       await this.daiToken.generateTokens(buyer1, BUYERS_DAI_BALANCE)
       await this.daiToken.generateTokens(buyer2, BUYERS_DAI_BALANCE)
       await this.daiToken.generateTokens(buyer3, BUYERS_DAI_BALANCE)
 
-      await this.daiToken.approve(this.app.address, INIFINITE_ALLOWANCE, { from: buyer1 })
-      await this.daiToken.approve(this.app.address, INIFINITE_ALLOWANCE, { from: buyer2 })
-      await this.daiToken.approve(this.app.address, INIFINITE_ALLOWANCE, { from: buyer3 })
+      await this.daiToken.approve(this.app.address, BUYERS_DAI_BALANCE, { from: buyer1 })
+      await this.daiToken.approve(this.app.address, BUYERS_DAI_BALANCE, { from: buyer2 })
+      await this.daiToken.approve(this.app.address, BUYERS_DAI_BALANCE, { from: buyer3 })
 
       await this.app.start({ from: appManager })
 
@@ -37,8 +36,8 @@ contract('Refund', ([anyone, appManager, buyer1, buyer2, buyer3]) => {
     // TODO: Test invalid attempts to get refunded before the sale closes
 
     it('Sale state is Refunding', async () => {
-      expect((await this.app.currentSaleState()).toNumber()).to.equal(SALE_STATE.REFUNDING);
-    });
+      expect((await this.app.currentSaleState()).toNumber()).to.equal(SALE_STATE.REFUNDING)
+    })
 
     it('Provided buyers with project tokens, at the expense of dai', async () => {
       expect((await this.daiToken.balanceOf(buyer1)).toNumber()).to.equal(0)
@@ -63,4 +62,4 @@ contract('Refund', ([anyone, appManager, buyer1, buyer2, buyer3]) => {
       // TODO
     })
   })
-});
+})
