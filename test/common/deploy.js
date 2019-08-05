@@ -18,8 +18,8 @@ const { hash } = require('eth-ens-namehash')
 const {
   ANY_ADDRESS,
   ZERO_ADDRESS,
-  VESTING_CLIFF_DATE,
-  VESTING_COMPLETE_DATE,
+  VESTING_CLIFF_PERIOD,
+  VESTING_COMPLETE_PERIOD,
   DAI_FUNDING_GOAL,
   PERCENT_SUPPLY_OFFERED,
   FUNDING_PERIOD,
@@ -168,20 +168,36 @@ const deploy = {
     await test.acl.createPermission(appManager, test.presale.address, test.PRESALE_START_ROLE, appManager, { from: appManager })
     await test.acl.createPermission(ANY_ADDRESS, test.presale.address, test.PRESALE_BUY_ROLE, appManager, { from: appManager })
   },
-  initializePresale: async (test) => {
-    await test.presale.initialize(
-      test.daiToken.address,
-      test.projectToken.address,
-      test.tokenManager.address,
-      VESTING_CLIFF_DATE,
-      VESTING_COMPLETE_DATE,
-      DAI_FUNDING_GOAL,
-      PERCENT_SUPPLY_OFFERED,
-      FUNDING_PERIOD,
-      test.pool.address,
-      test.fundraising.address,
-      TAP_RATE
-    )
+  initializePresale: async (test, params) => {
+    const paramsArr = [
+      params.daiToken,
+      params.projectToken,
+      params.tokenManager,
+      params.vestingCliffPeriod,
+      params.vestingCompletePeriod,
+      params.daiFundingGoal,
+      params.percentSupplyOffered,
+      params.fundingPeriod,
+      params.pool,
+      params.fundraising,
+      params.tapRate
+    ]
+    return test.presale.initialize(...paramsArr)
+  },
+  defaultDeployParams: (test) => {
+    return {
+      daiToken: test.daiToken.address,
+      projectToken: test.projectToken.address,
+      tokenManager: test.tokenManager.address,
+      vestingCliffPeriod: VESTING_CLIFF_PERIOD,
+      vestingCompletePeriod: VESTING_COMPLETE_PERIOD,
+      daiFundingGoal: DAI_FUNDING_GOAL,
+      percentSupplyOffered: PERCENT_SUPPLY_OFFERED,
+      fundingPeriod: FUNDING_PERIOD,
+      pool: test.pool.address,
+      fundraising: test.fundraising.address,
+      tapRate: TAP_RATE
+    }
   },
 
   /* BANCOR FORMULA */
@@ -196,8 +212,7 @@ const deploy = {
   },
 
   /* ~EVERYTHING~ */
-  deployDefaultSetup: async (test, appManager) => {
-
+  prepareDefaultSetup: async (test, appManager) => {
     await deploy.deployDAO(test, appManager)
     deploy.setDAOPermissions(test, appManager)
 
@@ -226,8 +241,11 @@ const deploy = {
     await deploy.initializeTap(test)
     await deploy.initializeFundraising(test)
     await deploy.initializeMarketMaker(test)
-    await deploy.initializePresale(test)
     await deploy.initializeTokenManager(test)
+  },
+  deployDefaultSetup: async (test, appManager) => {
+    await deploy.prepareDefaultSetup(test, appManager)
+    await deploy.initializePresale(test, deploy.defaultDeployParams(test))
   }
 }
 

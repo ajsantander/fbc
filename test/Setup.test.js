@@ -1,16 +1,23 @@
 const {
   DAI_FUNDING_GOAL,
   PERCENT_SUPPLY_OFFERED,
-  VESTING_CLIFF_DATE,
-  VESTING_COMPLETE_DATE,
+  VESTING_CLIFF_PERIOD,
+  VESTING_COMPLETE_PERIOD,
   SALE_STATE,
-  CONNECTOR_WEIGHT
+  CONNECTOR_WEIGHT,
+  TAP_RATE,
+  FUNDING_PERIOD
 } = require('./common/constants')
+const {
+  prepareDefaultSetup,
+  initializePresale,
+  defaultDeployParams,
+  deployDefaultSetup
+} = require('./common/deploy')
 const { daiToProjectTokenMultiplier } = require('./common/utils')
-const { deployDefaultSetup } = require('./common/deploy')
 const { assertRevert } = require('@aragon/test-helpers/assertThrow')
 
-contract('Setup', ([anyone, appManager]) => {
+contract('Setup', ([anyone, appManager, someEOA]) => {
 
   describe('When deploying the app with valid parameters', () => {
 
@@ -20,9 +27,13 @@ contract('Setup', ([anyone, appManager]) => {
       expect(web3.isAddress(this.presale.address)).to.equal(true)
     })
 
-    it('Deploys the Fundraising app correctly', async () => {
+    it('Deploys the Fundraising, and other apps correctly', async () => {
       expect(web3.isAddress(this.pool.address)).to.equal(true)
       expect(web3.isAddress(this.tap.address)).to.equal(true)
+      expect(web3.isAddress(this.fundraising.address)).to.equal(true)
+      expect(web3.isAddress(this.marketMaker.address)).to.equal(true)
+      expect(web3.isAddress(this.formula.address)).to.equal(true)
+      expect(web3.isAddress(this.vault.address)).to.equal(true)
     })
 
     it('Funding goal and percentage offered are set', async () => {
@@ -30,13 +41,18 @@ contract('Setup', ([anyone, appManager]) => {
       expect((await this.presale.percentSupplyOffered()).toNumber()).to.equal(PERCENT_SUPPLY_OFFERED)
     })
 
-    it('Vesting dates are set', async () => {
-      expect((await this.presale.vestingCliffDate()).toNumber()).to.be.closeTo(VESTING_CLIFF_DATE, 2)
-      expect((await this.presale.vestingCompleteDate()).toNumber()).to.be.closeTo(VESTING_COMPLETE_DATE, 2)
+    it('Dates and time periods are set', async () => {
+      expect((await this.presale.vestingCliffPeriod()).toNumber()).to.equal(VESTING_CLIFF_PERIOD)
+      expect((await this.presale.vestingCompletePeriod()).toNumber()).to.equal(VESTING_COMPLETE_PERIOD)
+      expect((await this.presale.fundingPeriod()).toNumber()).to.equal(FUNDING_PERIOD)
     })
 
     it('Initial state is Pending', async () => {
       expect((await this.presale.currentSaleState()).toNumber()).to.equal(SALE_STATE.PENDING)
+    })
+
+    it('Tap rate is properly set', async () => {
+      expect((await this.presale.tapRate()).toNumber()).to.equal(TAP_RATE)
     })
 
     it('Project token is deployed and set in the app', async () => {
@@ -58,9 +74,86 @@ contract('Setup', ([anyone, appManager]) => {
       const receivedValue = (await this.presale.daiToProjectTokenMultiplier()).toNumber()
       expect(receivedValue).to.equal(daiToProjectTokenMultiplier())
     })
+  })
 
-    it.skip('Fundraising controller and parameters are set up correctly', async () => {
-      // TODO
+  describe('When deploying the app with invalid parameters', () => {
+
+    let defaultParams;
+
+    before(async () => {
+      await prepareDefaultSetup(this, appManager)
+      defaultParams = defaultDeployParams(this)
+    })
+
+    it('Reverts when setting an invalid dai token', async () => {
+      await assertRevert(
+        initializePresale(this, { ...defaultParams,
+          daiToken: someEOA
+        }), 'PRESALE_INVALID_DAI_TOKEN'
+      )
+    })
+
+    it('Reverts when setting an invalid fundraising controller', async () => {
+      await assertRevert(
+        initializePresale(this, { ...defaultParams,
+          fundraising: someEOA
+        }), 'PRESALE_INVALID_FUNDRAISING_CONTROLLER'
+      )
+    })
+
+    it('Reverts when setting an invalid fundraising pool', async () => {
+      await assertRevert(
+        initializePresale(this, { ...defaultParams,
+          pool: someEOA
+        }), 'PRESALE_INVALID_POOL'
+      )
+    })
+
+    it('Reverts when setting invalid dates', async () => {
+      await assertRevert(
+        initializePresale(this, { ...defaultParams,
+          fundingPeriod: 0
+        }), 'PRESALE_INVALID_TIME_PERIOD'
+      )
+      await assertRevert(
+        initializePresale(this, { ...defaultParams,
+          vestingCliffPeriod: defaultParams.fundingPeriod - 1
+        }), 'PRESALE_INVALID_TIME_PERIOD'
+      )
+      await assertRevert(
+        initializePresale(this, { ...defaultParams,
+          vestingCompletePeriod: defaultParams.vestingCliffPeriod - 1
+        }), 'PRESALE_INVALID_TIME_PERIOD'
+      )
+    })
+
+    it('Reverts when setting an invalid funding goal', async () => {
+      await assertRevert(
+        initializePresale(this, { ...defaultParams,
+          daiFundingGoal: 0
+        }), 'PRESALE_INVALID_DAI_FUNDING_GOAL'
+      )
+    })
+
+    it('Reverts when setting an invalid tap rate', async () => {
+      await assertRevert(
+        initializePresale(this, { ...defaultParams,
+          tapRate: 0
+        }), 'PRESALE_INVALID_TAP_RATE'
+      )
+    })
+
+    it('Reverts when setting an invalid percent supply offered', async () => {
+      await assertRevert(
+        initializePresale(this, { ...defaultParams,
+          percentSupplyOffered: 0
+        }), 'PRESALE_INVALID_PERCENT_SUPPLY_OFFERED'
+      )
+      await assertRevert(
+        initializePresale(this, { ...defaultParams,
+          percentSupplyOffered: 101
+        }), 'PRESALE_INVALID_PERCENT_SUPPLY_OFFERED'
+      )
     })
   })
 })
