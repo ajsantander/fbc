@@ -18,8 +18,8 @@ contract Presale is AragonApp {
 
     event SaleStarted();
     event SaleClosed();
-    event TokensPurchased(address indexed buyer, uint256 daiSpent, uint256 tokensPurchased);
-    event TokensRefunded(address indexed buyer, uint256 daiRefunded, uint256 tokensBurned);
+    event TokensPurchased(address indexed buyer, uint256 daiSpent, uint256 tokensPurchased, uint256 purchaseId);
+    event TokensRefunded(address indexed buyer, uint256 daiRefunded, uint256 tokensBurned, uint256 purchaseId);
 
     string private constant ERROR_INVALID_STATE                  = "PRESALE_INVALID_STATE";
     string private constant ERROR_CAN_NOT_FORWARD                = "PRESALE_CAN_NOT_FORWARD";
@@ -129,7 +129,7 @@ contract Presale is AragonApp {
     }
 
     /*
-     * Public interface
+     * Public
      */
 
     function start() public auth(START_ROLE) {
@@ -138,7 +138,7 @@ contract Presale is AragonApp {
         emit SaleStarted();
     }
 
-    function buy(uint256 _daiToSpend) public auth(BUY_ROLE) returns (uint256) {
+    function buy(uint256 _daiToSpend) public auth(BUY_ROLE) {
         require(currentSaleState() == SaleState.Funding, ERROR_INVALID_STATE);
         require(daiToken.balanceOf(msg.sender) >= _daiToSpend, ERROR_INSUFFICIENT_DAI);
         require(daiToken.allowance(msg.sender, address(this)) >= _daiToSpend, ERROR_INSUFFICIENT_DAI_ALLOWANCE);
@@ -159,9 +159,7 @@ contract Presale is AragonApp {
         totalDaiRaised = totalDaiRaised.add(_daiToSpend);
         purchases[msg.sender][purchaseId] = _daiToSpend;
 
-        emit TokensPurchased(msg.sender, _daiToSpend, tokensToSell);
-
-        return purchaseId;
+        emit TokensPurchased(msg.sender, _daiToSpend, tokensToSell, purchaseId);
     }
 
     function refund(address _buyer, uint256 _purchaseId) public {
@@ -178,7 +176,7 @@ contract Presale is AragonApp {
         projectTokenManager.revokeVesting(_buyer, _purchaseId);
         projectTokenManager.burn(address(projectTokenManager), tokensSold);
 
-        emit TokensRefunded(msg.sender, daiToRefund, tokensSold);
+        emit TokensRefunded(msg.sender, daiToRefund, tokensSold, _purchaseId);
     }
 
     function close() public {

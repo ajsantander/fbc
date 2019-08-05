@@ -40,7 +40,8 @@ contract('Close', ([anyone, appManager, buyer1]) => {
       expect((await this.daiToken.balanceOf(fundraisingPool)).toNumber()).to.equal(totalDaiRaised)
     })
 
-    it('Fundraising app should be initialized correctly', async () => {
+    // TODO: Do not use assertExternalEvent (delete it) and use my own tool that I can use to verify the actual values
+    it.skip('Fundraising app should be initialized correctly', async () => {
       assertExternalEvent(closeReceipt, 'AddTokenTap(address,uint256)') // tap
       assertExternalEvent(closeReceipt, 'AddCollateralToken(address)') // pool
       assertExternalEvent(closeReceipt, 'AddCollateralToken(address,uint256,uint256,uint32)') // market maker
