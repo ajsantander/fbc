@@ -5,6 +5,7 @@ const {
   TAP_RATE
 } = require('./common/constants')
 const { deployDefaultSetup } = require('./common/deploy')
+const { assertExternalEvent } = require('./common/utils')
 const FundraisingController = artifacts.require('FundraisingMock.sol')
 
 const BUYERS_DAI_BALANCE = 20000
@@ -12,6 +13,8 @@ const BUYERS_DAI_BALANCE = 20000
 contract('Close', ([anyone, appManager, buyer1]) => {
 
   describe('When purchases have been made and the sale is Closed', () => {
+
+    let closeReceipt
 
     before(async () => {
       await deployDefaultSetup(this, appManager)
@@ -23,7 +26,7 @@ contract('Close', ([anyone, appManager, buyer1]) => {
       await this.presale.buy(BUYERS_DAI_BALANCE, {  from: buyer1 })
 
       await this.presale.mockIncreaseTime(FUNDING_PERIOD)
-      await this.presale.close()
+      closeReceipt = await this.presale.close()
     })
 
     it('Sale state is Closed', async () => {
@@ -38,11 +41,9 @@ contract('Close', ([anyone, appManager, buyer1]) => {
     })
 
     it('Fundraising app should be initialized correctly', async () => {
-      expect(await this.fundraising.token()).to.equal(this.daiToken.address)
-      expect((await this.fundraising.virtualSupply()).toNumber()).to.equal(0)
-      expect((await this.fundraising.virtualBalance()).toNumber()).to.equal(0)
-      expect((await this.fundraising.reserveRatio()).toNumber()).to.equal(1 / CONNECTOR_WEIGHT)
-      expect((await this.fundraising.tap()).toNumber()).to.equal(TAP_RATE)
+      assertExternalEvent(closeReceipt, 'AddTokenTap(address,uint256)') // tap
+      assertExternalEvent(closeReceipt, 'AddCollateralToken(address)') // pool
+      assertExternalEvent(closeReceipt, 'AddCollateralToken(address,uint256,uint256,uint32)') // market maker
     })
 
   })

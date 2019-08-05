@@ -20,6 +20,11 @@ contract('Setup', ([anyone, appManager]) => {
       expect(web3.isAddress(this.presale.address)).to.equal(true)
     })
 
+    it('Deploys the Fundraising app correctly', async () => {
+      expect(web3.isAddress(this.pool.address)).to.equal(true)
+      expect(web3.isAddress(this.tap.address)).to.equal(true)
+    })
+
     it('Funding goal and percentage offered are set', async () => {
       expect((await this.presale.daiFundingGoal()).toNumber()).to.equal(DAI_FUNDING_GOAL)
       expect((await this.presale.percentSupplyOffered()).toNumber()).to.equal(PERCENT_SUPPLY_OFFERED)

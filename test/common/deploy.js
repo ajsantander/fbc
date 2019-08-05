@@ -1,9 +1,12 @@
 const Presale = artifacts.require('PresaleMock.sol')
-const FundraisingController = artifacts.require('FundraisingMock.sol')
+const FundraisingController = artifacts.require('AragonFundraisingController.sol')
 const MiniMeToken = artifacts.require('@aragon/apps-shared-minime/contracts/MiniMeToken')
 const TokenManager = artifacts.require('TokenManager.sol')
 const Vault = artifacts.require('Vault.sol')
 const Pool = artifacts.require('Pool.sol')
+const Tap = artifacts.require('Tap.sol')
+const MarketMaker = artifacts.require('BancorMarketMaker.sol')
+const Formula = artifacts.require('BancorFormula.sol')
 const DAOFactory = artifacts.require('@aragon/core/contracts/factory/DAOFactory')
 const EVMScriptRegistryFactory = artifacts.require('@aragon/core/contracts/factory/EVMScriptRegistryFactory')
 const ACL = artifacts.require('@aragon/core/contracts/acl/ACL')
@@ -20,42 +23,30 @@ const {
   DAI_FUNDING_GOAL,
   PERCENT_SUPPLY_OFFERED,
   FUNDING_PERIOD,
-  TAP_RATE
+  TAP_RATE,
+  MAX_MONTHLY_TAP_INCREASE_RATE,
+  BLOCKS_IN_BATCH,
+  SELL_FEE_PERCENT,
+  BUY_FEE_PERCENT
 } = require('./constants')
 
 const deploy = {
 
   getProxyAddress: (receipt) => receipt.logs.filter(l => l.event === 'NewAppProxy')[0].args.proxy,
 
-  /* DAO Factory */
-  deployDAOFactory: async (test) => {
+  /* DAO */
+  deployDAO: async (test, daoManager) => {
     const kernelBase = await getContract('Kernel').new(true) // petrify immediately
     const aclBase = await getContract('ACL').new()
     const regFact = await EVMScriptRegistryFactory.new()
-    test.daoFact = await DAOFactory.new(
-      kernelBase.address,
-      aclBase.address,
-      regFact.address
-    )
+    const daoFact = await DAOFactory.new(kernelBase.address, aclBase.address, regFact.address)
+    const daoReceipt = await daoFact.newDAO(daoManager)
+    test.dao = Kernel.at(daoReceipt.logs.filter(l => l.event === 'DeployDAO')[0].args.dao)
+    test.acl = ACL.at(await test.dao.acl())
     test.APP_MANAGER_ROLE = await kernelBase.APP_MANAGER_ROLE()
   },
-
-  /* DAO */
-  deployDAO: async (test, daoManager) => {
-    const daoReceipt = await test.daoFact.newDAO(daoManager)
-    test.dao = Kernel.at(
-      daoReceipt.logs.filter(l => l.event === 'DeployDAO')[0].args.dao
-    )
-
-    test.acl = ACL.at(await test.dao.acl())
-
-    await test.acl.createPermission(
-      daoManager,
-      test.dao.address,
-      test.APP_MANAGER_ROLE,
-      daoManager,
-      { from: daoManager }
-    )
+  setDAOPermissions: async (test, daoManager) => {
+    await test.acl.createPermission(daoManager, test.dao.address, test.APP_MANAGER_ROLE, daoManager, { from: daoManager })
   },
 
   /* POOL */
@@ -63,8 +54,66 @@ const deploy = {
     const appBase = await Pool.new()
     const receipt = await test.dao.newAppInstance(hash('pool.aragonpm.eth'), appBase.address, '0x', false, { from: appManager })
     test.pool = Pool.at(deploy.getProxyAddress(receipt))
-
+    test.POOL_TRANSFER_ROLE = await appBase.TRANSFER_ROLE()
+    test.POOL_ADD_COLLATERAL_TOKEN_ROLE = await appBase.ADD_COLLATERAL_TOKEN_ROLE()
+  },
+  setPoolPermissions: async (test, appManager) => {
+    await test.acl.createPermission(ANY_ADDRESS, test.pool.address, test.POOL_TRANSFER_ROLE, appManager, { from: appManager })
+    await test.acl.createPermission(ANY_ADDRESS, test.pool.address, test.POOL_ADD_COLLATERAL_TOKEN_ROLE, appManager, { from: appManager })
+  },
+  initializePool: async (test) => {
     await test.pool.initialize()
+  },
+
+  /* TAP */
+  deployTap: async (test, appManager) => {
+    const appBase = await Tap.new()
+    const receipt = await test.dao.newAppInstance(hash('tap.aragonpm.eth'), appBase.address, '0x', false, { from: appManager })
+    test.tap = Tap.at(deploy.getProxyAddress(receipt))
+    test.TAP_ADD_TOKEN_TAP_ROLE = await appBase.ADD_TOKEN_TAP_ROLE()
+  },
+  setTapPermissions: async (test, appManager) => {
+    await test.acl.createPermission(ANY_ADDRESS, test.tap.address, test.TAP_ADD_TOKEN_TAP_ROLE, appManager, { from: appManager })
+  },
+  initializeTap: async (test) => {
+    await test.tap.initialize(test.pool.address, test.vault.address, MAX_MONTHLY_TAP_INCREASE_RATE)
+  },
+
+  /* MARKET-MAKER */
+  deployMarketMaker: async (test, appManager) => {
+    const appBase = await MarketMaker.new()
+    const receipt = await test.dao.newAppInstance(hash('bancor-market-maker.aragonpm.eth'), appBase.address, '0x', false, { from: appManager })
+    test.marketMaker = MarketMaker.at(deploy.getProxyAddress(receipt))
+    test.MARKET_MAKER_ADD_COLLATERAL_TOKEN_ROLE = await appBase.ADD_COLLATERAL_TOKEN_ROLE()
+  },
+  setMarketMakerPermissions: async (test, appManager) => {
+    await test.acl.createPermission(ANY_ADDRESS, test.marketMaker.address, test.MARKET_MAKER_ADD_COLLATERAL_TOKEN_ROLE, appManager, { from: appManager })
+  },
+  initializeMarketMaker: async (test) => {
+    await test.marketMaker.initialize(
+			test.fundraising.address,
+      test.tokenManager.address,
+      test.pool.address,
+      test.vault.address,
+      test.formula.address,
+      BLOCKS_IN_BATCH,
+      BUY_FEE_PERCENT,
+      SELL_FEE_PERCENT
+		)
+  },
+
+  /* FUNDRAISING */
+  deployFundraising: async (test, appManager) => {
+    const appBase = await FundraisingController.new()
+    const receipt = await test.dao.newAppInstance(hash('fundraising-controller.aragonpm.eth'), appBase.address, '0x', false, { from: appManager })
+    test.fundraising = FundraisingController.at(deploy.getProxyAddress(receipt))
+    test.FUNDRAISING_ADD_COLLATERAL_TOKEN_ROLE = await appBase.ADD_COLLATERAL_TOKEN_ROLE()
+  },
+  setFundraisingPermissions: async (test, appManager) => {
+    await test.acl.createPermission(ANY_ADDRESS, test.fundraising.address, test.FUNDRAISING_ADD_COLLATERAL_TOKEN_ROLE, appManager, { from: appManager })
+  },
+  initializeFundraising: async (test) => {
+    await test.fundraising.initialize(test.marketMaker.address, test.pool.address, test.tap.address)
   },
 
   /* VAULT */
@@ -72,7 +121,11 @@ const deploy = {
     const appBase = await Vault.new()
     const receipt = await test.dao.newAppInstance(hash('vault.aragonpm.eth'), appBase.address, '0x', false, { from: appManager })
     test.vault = Vault.at(deploy.getProxyAddress(receipt))
-
+  },
+  setVaultPermissions: async (test, appManager) => {
+    // No permissions
+  },
+  initializeVault: async (test) => {
     await test.vault.initialize()
   },
 
@@ -81,16 +134,20 @@ const deploy = {
     const appBase = await TokenManager.new()
     const receipt = await test.dao.newAppInstance(hash('token-manager.aragonpm.eth'), appBase.address, '0x', false, { from: appManager })
     test.tokenManager = TokenManager.at(deploy.getProxyAddress(receipt))
-
-    const ISSUE_ROLE = await appBase.ISSUE_ROLE()
-    const ASSIGN_ROLE = await appBase.ASSIGN_ROLE()
-    const REVOKE_VESTINGS_ROLE = await appBase.REVOKE_VESTINGS_ROLE()
-    const BURN_ROLE = await appBase.BURN_ROLE()
-    await test.acl.createPermission(ANY_ADDRESS, test.tokenManager.address, BURN_ROLE, appManager, { from: appManager })
-    await test.acl.createPermission(ANY_ADDRESS, test.tokenManager.address, REVOKE_VESTINGS_ROLE, appManager, { from: appManager })
-    await test.acl.createPermission(ANY_ADDRESS, test.tokenManager.address, ISSUE_ROLE, appManager, { from: appManager })
-    await test.acl.createPermission(ANY_ADDRESS, test.tokenManager.address, ASSIGN_ROLE, appManager, { from: appManager })
-
+    test.TOKEN_MANAGER_MINT_ROLE = await appBase.MINT_ROLE()
+    test.TOKEN_MANAGER_ISSUE_ROLE = await appBase.ISSUE_ROLE()
+    test.TOKEN_MANAGER_ASSIGN_ROLE = await appBase.ASSIGN_ROLE()
+    test.TOKEN_MANAGER_REVOKE_VESTINGS_ROLE = await appBase.REVOKE_VESTINGS_ROLE()
+    test.TOKEN_MANAGER_BURN_ROLE = await appBase.BURN_ROLE()
+  },
+  setTokenManagerPermissions: async (test, appManager) => {
+    await test.acl.createPermission(ANY_ADDRESS, test.tokenManager.address, test.TOKEN_MANAGER_MINT_ROLE, appManager, { from: appManager })
+    await test.acl.createPermission(ANY_ADDRESS, test.tokenManager.address, test.TOKEN_MANAGER_BURN_ROLE, appManager, { from: appManager })
+    await test.acl.createPermission(ANY_ADDRESS, test.tokenManager.address, test.TOKEN_MANAGER_REVOKE_VESTINGS_ROLE, appManager, { from: appManager })
+    await test.acl.createPermission(ANY_ADDRESS, test.tokenManager.address, test.TOKEN_MANAGER_ISSUE_ROLE, appManager, { from: appManager })
+    await test.acl.createPermission(ANY_ADDRESS, test.tokenManager.address, test.TOKEN_MANAGER_ASSIGN_ROLE, appManager, { from: appManager })
+  },
+  initializeTokenManager: async (test) => {
     await test.projectToken.changeController(test.tokenManager.address)
     await test.tokenManager.initialize(
       test.projectToken.address,
@@ -100,16 +157,18 @@ const deploy = {
   },
 
   /* PRESALE */
-  deployApp: async (test, appManager) => {
+  deployPresale: async (test, appManager) => {
     const appBase = await Presale.new()
     const receipt = await test.dao.newAppInstance(hash('presale.aragonpm.eth'), appBase.address, '0x', false, { from: appManager })
     test.presale = Presale.at(deploy.getProxyAddress(receipt))
-
-    const START_ROLE = await appBase.START_ROLE()
-    const BUY_ROLE = await appBase.BUY_ROLE()
-    await test.acl.createPermission(appManager, test.presale.address, START_ROLE, appManager, { from: appManager })
-    await test.acl.createPermission(ANY_ADDRESS, test.presale.address, BUY_ROLE, appManager, { from: appManager })
-
+    test.PRESALE_START_ROLE = await appBase.START_ROLE()
+    test.PRESALE_BUY_ROLE = await appBase.BUY_ROLE()
+  },
+  setPresalePermissions: async (test, appManager) => {
+    await test.acl.createPermission(appManager, test.presale.address, test.PRESALE_START_ROLE, appManager, { from: appManager })
+    await test.acl.createPermission(ANY_ADDRESS, test.presale.address, test.PRESALE_BUY_ROLE, appManager, { from: appManager })
+  },
+  initializePresale: async (test) => {
     await test.presale.initialize(
       test.daiToken.address,
       test.projectToken.address,
@@ -125,27 +184,50 @@ const deploy = {
     )
   },
 
+  /* BANCOR FORMULA */
+  deployBancorFormula: async (test) => {
+    test.formula = await Formula.new()
+  },
+
   /* TOKENS */
   deployTokens: async (test) => {
     test.daiToken = await MiniMeToken.new(ZERO_ADDRESS, ZERO_ADDRESS, 0, 'DaiToken', 18, 'DAI', true)
     test.projectToken = await MiniMeToken.new(ZERO_ADDRESS, ZERO_ADDRESS, 0, 'ProjectToken', 18, 'PRO', true)
   },
 
-  /* FUNDRAISING */
-  deployFundraisingController: async (test) => {
-    test.fundraising = await FundraisingController.new()
-  },
-
   /* ~EVERYTHING~ */
   deployDefaultSetup: async (test, appManager) => {
-    await deploy.deployDAOFactory(test)
+
     await deploy.deployDAO(test, appManager)
+    deploy.setDAOPermissions(test, appManager)
+
     await deploy.deployTokens(test)
     await deploy.deployTokenManager(test, appManager)
+
+		await deploy.deployBancorFormula(test, appManager)
+
     await deploy.deployVault(test, appManager)
     await deploy.deployPool(test, appManager)
-    await deploy.deployFundraisingController(test)
-    await deploy.deployApp(test, appManager)
+    await deploy.deployTap(test, appManager)
+    await deploy.deployMarketMaker(test, appManager)
+    await deploy.deployFundraising(test, appManager)
+    await deploy.deployPresale(test, appManager)
+
+    await deploy.setVaultPermissions(test, appManager)
+    await deploy.setPoolPermissions(test, appManager)
+    await deploy.setTapPermissions(test, appManager)
+    await deploy.setFundraisingPermissions(test, appManager)
+    await deploy.setMarketMakerPermissions(test, appManager)
+    await deploy.setPresalePermissions(test, appManager)
+    await deploy.setTokenManagerPermissions(test, appManager)
+
+    await deploy.initializeVault(test)
+    await deploy.initializePool(test)
+    await deploy.initializeTap(test)
+    await deploy.initializeFundraising(test)
+    await deploy.initializeMarketMaker(test)
+    await deploy.initializePresale(test)
+    await deploy.initializeTokenManager(test)
   }
 }
 

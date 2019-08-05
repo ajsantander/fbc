@@ -1,7 +1,16 @@
+// Generic
 const NOW = new Date().getTime() / 1000
 const DAYS = 24 * 3600
 const ANY_ADDRESS = '0xffffffffffffffffffffffffffffffffffffffff'
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
+const SALE_STATE = {
+  PENDING: 0,
+  FUNDING: 1,
+  REFUNDING: 2,
+  CLOSED: 3
+}
+
+// Presale parameters
 const VESTING_CLIFF_DATE = NOW + 90 * DAYS
 const VESTING_COMPLETE_DATE = NOW + 360 * DAYS
 const DAI_FUNDING_GOAL = 20000
@@ -9,12 +18,12 @@ const PERCENT_SUPPLY_OFFERED = 90
 const CONNECTOR_WEIGHT = 0.1
 const FUNDING_PERIOD = 14 * DAYS
 const TAP_RATE = 5000
-const SALE_STATE = {
-  PENDING: 0,
-  FUNDING: 1,
-  REFUNDING: 2,
-  CLOSED: 3
-}
+
+// Funding paramenters
+const MAX_MONTHLY_TAP_INCREASE_RATE = 50e16
+const BLOCKS_IN_BATCH = 10
+const BUY_FEE_PERCENT = 100000000000000000 // 1%
+const SELL_FEE_PERCENT = 100000000000000000
 
 module.exports = {
   NOW,
@@ -28,5 +37,9 @@ module.exports = {
   CONNECTOR_WEIGHT,
   FUNDING_PERIOD,
   TAP_RATE,
-  SALE_STATE
+  SALE_STATE,
+  MAX_MONTHLY_TAP_INCREASE_RATE,
+	BLOCKS_IN_BATCH,
+	SELL_FEE_PERCENT,
+	BUY_FEE_PERCENT
 }

@@ -10,7 +10,7 @@ import "@aragon/os/contracts/lib/token/ERC20.sol";
 import "@aragon/apps-shared-minime/contracts/MiniMeToken.sol";
 import "@aragon/apps-token-manager/contracts/TokenManager.sol";
 
-import "./test/mocks/FundraisingMock.sol";
+import "@ablack/controller-aragon-fundraising/contracts/AragonFundraisingController.sol";
 
 
 contract Presale is IForwarder, AragonApp {
@@ -41,7 +41,7 @@ contract Presale is IForwarder, AragonApp {
     uint256 public daiFundingGoal;
     uint64 public fundingPeriod;
 
-    FundraisingMock fundraisingController;
+    AragonFundraisingController fundraisingController;
     address public fundraisingPool;
     uint256 tapRate;
 
@@ -83,7 +83,7 @@ contract Presale is IForwarder, AragonApp {
         uint256 _percentSupplyOffered,
         uint64 _fundingPeriod,
         address _fundraisingPool,
-        FundraisingMock _fundraisingController,
+        AragonFundraisingController _fundraisingController,
         uint256 _tapRate
     )
         external
