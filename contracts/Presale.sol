@@ -1,7 +1,6 @@
 pragma solidity ^0.4.24;
 
 import "@aragon/os/contracts/apps/AragonApp.sol";
-import "@aragon/os/contracts/common/IForwarder.sol";
 
 import "@aragon/os/contracts/lib/math/SafeMath.sol";
 import "@aragon/os/contracts/lib/math/SafeMath64.sol";
@@ -13,7 +12,7 @@ import "@aragon/apps-token-manager/contracts/TokenManager.sol";
 import "@ablack/controller-aragon-fundraising/contracts/AragonFundraisingController.sol";
 
 
-contract Presale is IForwarder, AragonApp {
+contract Presale is AragonApp {
     using SafeMath for uint256;
     using SafeMath64 for uint64;
 
@@ -202,24 +201,6 @@ contract Presale is IForwarder, AragonApp {
                 return SaleState.Closed;
             }
         }
-    }
-
-    /*
-     * IForwarder interface implementation
-     */
-
-    function isForwarder() external pure returns (bool) {
-        return true;
-    }
-
-    function forward(bytes _evmScript) public {
-        require(canForward(msg.sender, _evmScript), ERROR_CAN_NOT_FORWARD);
-        // TODO
-    }
-
-    function canForward(address _sender, bytes) public view returns (bool) {
-        // TODO
-        return true;
     }
 
     /*
