@@ -27,7 +27,8 @@ const {
   MAX_MONTHLY_TAP_INCREASE_RATE,
   BLOCKS_IN_BATCH,
   SELL_FEE_PERCENT,
-  BUY_FEE_PERCENT
+  BUY_FEE_PERCENT,
+  PERCENT_FUNDING_FOR_BENEFICIARY
 } = require('./constants')
 
 const deploy = {
@@ -180,11 +181,13 @@ const deploy = {
       params.fundingPeriod,
       params.pool,
       params.fundraising,
-      params.tapRate
+      params.tapRate,
+      params.beneficiaryAddress,
+      params.percentFundingForBeneficiary
     ]
     return test.presale.initialize(...paramsArr)
   },
-  defaultDeployParams: (test) => {
+  defaultDeployParams: (test, beneficiaryAddress) => {
     return {
       daiToken: test.daiToken.address,
       projectToken: test.projectToken.address,
@@ -196,7 +199,9 @@ const deploy = {
       fundingPeriod: FUNDING_PERIOD,
       pool: test.pool.address,
       fundraising: test.fundraising.address,
-      tapRate: TAP_RATE
+      tapRate: TAP_RATE,
+      beneficiaryAddress,
+      percentFundingForBeneficiary: PERCENT_FUNDING_FOR_BENEFICIARY
     }
   },
 
@@ -245,7 +250,7 @@ const deploy = {
   },
   deployDefaultSetup: async (test, appManager) => {
     await deploy.prepareDefaultSetup(test, appManager)
-    await deploy.initializePresale(test, deploy.defaultDeployParams(test))
+    await deploy.initializePresale(test, deploy.defaultDeployParams(test, appManager))
   }
 }
 

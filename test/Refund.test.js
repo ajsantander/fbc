@@ -9,7 +9,7 @@ const { assertRevert } = require('@aragon/test-helpers/assertThrow')
 
 const BUYERS_DAI_BALANCE = 1000
 
-contract.only('Refund', ([anyone, appManager, buyer1, buyer2, buyer3, buyer4]) => {
+contract('Refund', ([anyone, appManager, buyer1, buyer2, buyer3, buyer4]) => {
 
   let startTime
 

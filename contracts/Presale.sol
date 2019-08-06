@@ -32,9 +32,10 @@ contract Presale is AragonApp {
     string private constant ERROR_INVALID_FUNDRAISING_CONTROLLER = "PRESALE_INVALID_FUNDRAISING_CONTROLLER";
     string private constant ERROR_INVALID_TIME_PERIOD            = "PRESALE_INVALID_TIME_PERIOD";
     string private constant ERROR_INVALID_DAI_FUNDING_GOAL       = "PRESALE_INVALID_DAI_FUNDING_GOAL";
-    string private constant ERROR_INVALID_PERCENT_SUPPLY_OFFERED = "PRESALE_INVALID_PERCENT_SUPPLY_OFFERED";
+    string private constant ERROR_INVALID_PERCENT_VALUE          = "PRESALE_INVALID_PERCENT_VALUE";
     string private constant ERROR_INVALID_TAP_RATE               = "PRESALE_INVALID_TAP_RATE";
     string private constant ERROR_INVALID_POOL                   = "PRESALE_INVALID_POOL";
+    string private constant ERROR_INVALID_BENEFICIARY_ADDRESS    = "PRESALE_INVALID_BENEFICIARY_ADDRESS";
 
     bytes32 public constant START_ROLE = keccak256("START_ROLE");
     bytes32 public constant BUY_ROLE   = keccak256("BUY_ROLE");
@@ -46,8 +47,11 @@ contract Presale is AragonApp {
     uint64 public startDate;
 
     uint256 public totalDaiRaised;
-    uint256 public daiFundingGoal;
     uint64 public fundingPeriod;
+
+    uint256 public daiFundingGoal;
+    uint256 public percentFundingForBeneficiary;
+    address public beneficiaryAddress;
 
     AragonFundraisingController fundraisingController;
     address public fundraisingPool;
@@ -92,7 +96,9 @@ contract Presale is AragonApp {
         uint64 _fundingPeriod,
         address _fundraisingPool,
         AragonFundraisingController _fundraisingController,
-        uint256 _tapRate
+        uint256 _tapRate,
+        address _beneficiaryAddress,
+        uint256 _percentFundingForBenefiriary
     )
         external
         onlyInit
@@ -105,8 +111,11 @@ contract Presale is AragonApp {
         require(_vestingCompletePeriod > _vestingCliffPeriod, ERROR_INVALID_TIME_PERIOD);
         require(_daiFundingGoal > 0, ERROR_INVALID_DAI_FUNDING_GOAL);
         require(_tapRate > 0, ERROR_INVALID_TAP_RATE);
-        require(_percentSupplyOffered > 0, ERROR_INVALID_PERCENT_SUPPLY_OFFERED);
-        require(_percentSupplyOffered < 100, ERROR_INVALID_PERCENT_SUPPLY_OFFERED);
+        require(_percentSupplyOffered > 0, ERROR_INVALID_PERCENT_VALUE);
+        require(_percentSupplyOffered < 100, ERROR_INVALID_PERCENT_VALUE);
+        require(_beneficiaryAddress != 0x0, ERROR_INVALID_BENEFICIARY_ADDRESS);
+        require(_percentFundingForBenefiriary > 0, ERROR_INVALID_PERCENT_VALUE);
+        require(_percentFundingForBenefiriary < 100, ERROR_INVALID_PERCENT_VALUE);
         // TODO: Perform further validations on the set fundrasing app?
 
         initialized();
@@ -121,6 +130,9 @@ contract Presale is AragonApp {
         vestingCliffPeriod = _vestingCliffPeriod;
         vestingCompletePeriod = _vestingCompletePeriod;
         fundingPeriod = _fundingPeriod;
+
+        beneficiaryAddress = _beneficiaryAddress;
+        percentFundingForBeneficiary = _percentFundingForBenefiriary;
 
         daiFundingGoal = _daiFundingGoal;
         percentSupplyOffered = _percentSupplyOffered;

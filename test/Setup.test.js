@@ -6,7 +6,9 @@ const {
   SALE_STATE,
   CONNECTOR_WEIGHT,
   TAP_RATE,
-  FUNDING_PERIOD
+  FUNDING_PERIOD,
+  ZERO_ADDRESS,
+  PERCENT_FUNDING_FOR_BENEFICIARY
 } = require('./common/constants')
 const {
   prepareDefaultSetup,
@@ -74,6 +76,14 @@ contract('Setup', ([anyone, appManager, someEOA]) => {
       const receivedValue = (await this.presale.daiToProjectTokenMultiplier()).toNumber()
       expect(receivedValue).to.equal(daiToProjectTokenMultiplier())
     })
+
+    it('Beneficiary address is set', async () => {
+      expect((await this.presale.beneficiaryAddress())).to.equal(appManager)
+    })
+
+    it('Percent funding for beneficiary is set', async () => {
+      expect((await this.presale.percentFundingForBeneficiary()).toNumber()).to.equal(PERCENT_FUNDING_FOR_BENEFICIARY)
+    })
   })
 
   describe('When deploying the app with invalid parameters', () => {
@@ -82,7 +92,7 @@ contract('Setup', ([anyone, appManager, someEOA]) => {
 
     before(async () => {
       await prepareDefaultSetup(this, appManager)
-      defaultParams = defaultDeployParams(this)
+      defaultParams = defaultDeployParams(this, appManager)
     })
 
     it('Reverts when setting an invalid dai token', async () => {
@@ -147,13 +157,32 @@ contract('Setup', ([anyone, appManager, someEOA]) => {
       await assertRevert(
         initializePresale(this, { ...defaultParams,
           percentSupplyOffered: 0
-        }), 'PRESALE_INVALID_PERCENT_SUPPLY_OFFERED'
+        }), 'PRESALE_INVALID_PERCENT_VALUE'
       )
       await assertRevert(
         initializePresale(this, { ...defaultParams,
           percentSupplyOffered: 101
-        }), 'PRESALE_INVALID_PERCENT_SUPPLY_OFFERED'
+        }), 'PRESALE_INVALID_PERCENT_VALUE'
       )
+    })
+
+    it('Reverts when setting an invalid percent funding for beneficiary', async () => {
+      await assertRevert(
+        initializePresale(this, { ...defaultParams,
+          percentFundingForBeneficiary: 0
+        }), 'PRESALE_INVALID_PERCENT_VALUE'
+      )
+      await assertRevert(
+        initializePresale(this, { ...defaultParams,
+          percentFundingForBeneficiary: 101
+        }), 'PRESALE_INVALID_PERCENT_VALUE'
+      )
+    })
+
+    it('Reverts when setting an invalid beneficiary address', async () => {
+      initializePresale(this, { ...defaultParams,
+        beneficiaryAddresss: ZERO_ADDRESS
+      }), 'PRESALE_INVALID_PERCENT_VALUE'
     })
   })
 })
