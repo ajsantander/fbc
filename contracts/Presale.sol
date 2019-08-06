@@ -31,7 +31,7 @@ contract Presale is AragonApp {
     string private constant ERROR_INVALID_DAI_TOKEN              = "PRESALE_INVALID_DAI_TOKEN";
     string private constant ERROR_INVALID_FUNDRAISING_CONTROLLER = "PRESALE_INVALID_FUNDRAISING_CONTROLLER";
     string private constant ERROR_INVALID_TIME_PERIOD            = "PRESALE_INVALID_TIME_PERIOD";
-    string private constant ERROR_INVALID_DAI_FUNDING_GOAL           = "PRESALE_INVALID_DAI_FUNDING_GOAL";
+    string private constant ERROR_INVALID_DAI_FUNDING_GOAL       = "PRESALE_INVALID_DAI_FUNDING_GOAL";
     string private constant ERROR_INVALID_PERCENT_SUPPLY_OFFERED = "PRESALE_INVALID_PERCENT_SUPPLY_OFFERED";
     string private constant ERROR_INVALID_TAP_RATE               = "PRESALE_INVALID_TAP_RATE";
     string private constant ERROR_INVALID_POOL                   = "PRESALE_INVALID_POOL";
@@ -63,7 +63,7 @@ contract Presale is AragonApp {
     uint32 public constant CONNECTOR_WEIGHT_INV = 10;
 
     // Keeps track of how much dai is spent, per purchase, per buyer.
-    mapping(address => mapping(uint256 => uint256)) purchases;
+    mapping(address => mapping(uint256 => uint256)) public purchases;
     /*      |                  |          |
      *      |                  |          daiSpent
      *      |                  purchaseId

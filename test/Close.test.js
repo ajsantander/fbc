@@ -5,7 +5,7 @@ const {
   TAP_RATE
 } = require('./common/constants')
 const { deployDefaultSetup } = require('./common/deploy')
-const { assertExternalEvent } = require('./common/utils')
+const { getEvent } = require('./common/utils')
 const FundraisingController = artifacts.require('FundraisingMock.sol')
 
 const BUYERS_DAI_BALANCE = 20000
@@ -40,12 +40,10 @@ contract('Close', ([anyone, appManager, buyer1]) => {
       expect((await this.daiToken.balanceOf(fundraisingPool)).toNumber()).to.equal(totalDaiRaised)
     })
 
-    // TODO: Do not use assertExternalEvent (delete it) and use my own tool that I can use to verify the actual values
+    // TODO: Look into the events and validate values
     it.skip('Fundraising app should be initialized correctly', async () => {
-      assertExternalEvent(closeReceipt, 'AddTokenTap(address,uint256)') // tap
-      assertExternalEvent(closeReceipt, 'AddCollateralToken(address)') // pool
-      assertExternalEvent(closeReceipt, 'AddCollateralToken(address,uint256,uint256,uint32)') // market maker
+      expect(getEvent(closeReceipt, 'AddTokenTap')).to.exist
+      expect(getEvent(closeReceipt, 'AddCollateralToken')).to.exist
     })
-
   })
 })
