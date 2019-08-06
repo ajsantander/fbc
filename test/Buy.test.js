@@ -66,9 +66,16 @@ contract('Buy', ([anyone, appManager, buyer1, buyer2]) => {
       describe('When a user buys project tokens', () => {
 
         let purchaseTx;
+        let initialProjectTokenSupply
 
         before(async () => {
+          initialProjectTokenSupply = (await this.projectToken.totalSupply()).toNumber()
           purchaseTx = await this.presale.buy(BUYER_1_DAI_BALANCE, { from: buyer1 })
+        })
+
+        it('Project tokens are minted on purchases', async () => {
+          const expectedAmount = daiToProjectTokens(BUYER_1_DAI_BALANCE)
+          expect((await this.projectToken.totalSupply()).toNumber()).to.equal(initialProjectTokenSupply + expectedAmount)
         })
 
         it('The dai are transferred from the buyer to the app', async () => {
@@ -84,7 +91,7 @@ contract('Buy', ([anyone, appManager, buyer1, buyer2]) => {
           expect(userBalance).to.equal(expectedAmount)
         })
 
-        it('An event is emitted', async () => {
+        it('A TokensPurchased event is emitted', async () => {
           const expectedAmount = daiToProjectTokens(BUYER_1_DAI_BALANCE)
           const event = getEvent(purchaseTx, 'TokensPurchased')
           expect(event).to.exist

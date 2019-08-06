@@ -4,6 +4,7 @@ const {
   SALE_STATE
 } = require('./common/constants')
 const { deployDefaultSetup } = require('./common/deploy')
+const { getEvent } = require('./common/utils')
 
 const getState = async (test) => {
   return (await test.presale.currentSaleState()).toNumber()
@@ -26,14 +27,19 @@ contract('States', ([anyone, appManager, buyer]) => {
     describe('When the sale is started', () => {
 
       let startDate
+      let startReceipt
 
       before(async () => {
         startDate = new Date().getTime() / 1000
-        await this.presale.start({ from: appManager })
+        startReceipt = await this.presale.start({ from: appManager })
       })
 
       it('The state is Funding', async () => {
         expect(await getState(this)).to.equal(SALE_STATE.FUNDING)
+      })
+
+      it('A SaleStarted event is triggered', async () => {
+        expect(getEvent(startReceipt, 'SaleStarted')).to.exist
       })
 
       describe('When the funding period is still running', () => {

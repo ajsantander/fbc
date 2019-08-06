@@ -191,7 +191,7 @@ contract Presale is AragonApp {
         projectTokenManager.revokeVesting(_buyer, _purchaseId);
         projectTokenManager.burn(address(projectTokenManager), tokensSold);
 
-        emit TokensRefunded(msg.sender, daiToRefund, tokensSold, _purchaseId);
+        emit TokensRefunded(_buyer, daiToRefund, tokensSold, _purchaseId);
     }
 
     function close() public {
