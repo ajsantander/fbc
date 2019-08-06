@@ -2,19 +2,18 @@ const {
   FUNDING_PERIOD,
   SALE_STATE,
   CONNECTOR_WEIGHT,
-  TAP_RATE
+  TAP_RATE,
+  PERCENT_FUNDING_FOR_BENEFICIARY
 } = require('./common/constants')
 const { deployDefaultSetup } = require('./common/deploy')
-const { getEvent } = require('./common/utils')
-const FundraisingController = artifacts.require('FundraisingMock.sol')
+const { getEvent, assertExternalEvent } = require('./common/utils')
+const { assertRevert } = require('@aragon/test-helpers/assertThrow')
 
 const BUYERS_DAI_BALANCE = 20000
 
 contract('Close', ([anyone, appManager, buyer1]) => {
 
-  describe('When purchases have been made and the sale is Closed', () => {
-
-    let closeReceipt
+  describe('When enough purchases have been made to close the sale and funding period has elapsed', () => {
 
     before(async () => {
       await deployDefaultSetup(this, appManager)
@@ -23,27 +22,52 @@ contract('Close', ([anyone, appManager, buyer1]) => {
       await this.presale.start({ from: appManager })
 
       // Make a single purchase that reaches the funding goal
-      await this.presale.buy(BUYERS_DAI_BALANCE, {  from: buyer1 })
+      await this.presale.buy(BUYERS_DAI_BALANCE, { from: buyer1 })
 
       await this.presale.mockIncreaseTime(FUNDING_PERIOD)
-      closeReceipt = await this.presale.close()
     })
 
-    it('Sale state is Closed', async () => {
-      expect((await this.presale.currentSaleState()).toNumber()).to.equal(SALE_STATE.CLOSED)
+    it('Sale state is GoalReached', async () => {
+      expect((await this.presale.currentSaleState()).toNumber()).to.equal(SALE_STATE.GOAL_REACHED)
     })
 
-    it('Raised funds are transferred to the fundraising pool', async () => {
-      const totalDaiRaised = (await this.presale.totalDaiRaised()).toNumber()
-      const fundraisingPool = await this.presale.fundraisingPool()
-      expect((await this.daiToken.balanceOf(this.presale.address)).toNumber()).to.equal(0)
-      expect((await this.daiToken.balanceOf(fundraisingPool)).toNumber()).to.equal(totalDaiRaised)
-    })
+    describe('When the sale is closed', () => {
 
-    // TODO: Look into the events and validate values
-    it.skip('Fundraising app should be initialized correctly', async () => {
-      expect(getEvent(closeReceipt, 'AddTokenTap')).to.exist
-      expect(getEvent(closeReceipt, 'AddCollateralToken')).to.exist
+      let closeReceipt
+
+      before(async () => {
+        closeReceipt = await this.presale.close()
+      })
+
+      it('Sale state is Closed', async () => {
+        expect((await this.presale.currentSaleState()).toNumber()).to.equal(SALE_STATE.CLOSED)
+      })
+
+      it('Raised funds are transferred to the fundraising pool and the beneficiary address', async () => {
+        expect((await this.daiToken.balanceOf(this.presale.address)).toNumber()).to.equal(0)
+
+        const totalDaiRaised = (await this.presale.totalDaiRaised()).toNumber()
+        const daiForBeneficiary = Math.floor(totalDaiRaised * PERCENT_FUNDING_FOR_BENEFICIARY / 100)
+        const daiForPool = totalDaiRaised - daiForBeneficiary
+        const fundraisingPool = await this.presale.fundraisingPool()
+        expect((await this.daiToken.balanceOf(appManager)).toNumber()).to.equal(daiForBeneficiary)
+        expect((await this.daiToken.balanceOf(fundraisingPool)).toNumber()).to.equal(daiForPool)
+      })
+
+      it('Sale cannot be closed again', async () => {
+        await assertRevert(
+          this.presale.close(),
+          'PRESALE_INVALID_STATE'
+        )
+      })
+
+      it('Fundraising app should be initialized correctly', async () => {
+        expect(getEvent(closeReceipt, 'SaleClosed')).to.exist
+
+        assertExternalEvent(closeReceipt, 'AddTokenTap(address,uint256)') // Tap
+        assertExternalEvent(closeReceipt, 'AddCollateralToken(address)') // Pool
+        assertExternalEvent(closeReceipt, 'AddCollateralToken(address,uint256,uint256,uint32)') // Market maker
+      })
     })
   })
 })

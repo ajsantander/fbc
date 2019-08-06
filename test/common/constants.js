@@ -7,7 +7,8 @@ const SALE_STATE = {
   PENDING: 0,
   FUNDING: 1,
   REFUNDING: 2,
-  CLOSED: 3
+  GOAL_REACHED: 3,
+  CLOSED: 4
 }
 
 // Presale parameters

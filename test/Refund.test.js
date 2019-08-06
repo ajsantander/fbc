@@ -99,7 +99,7 @@ contract('Refund', ([anyone, appManager, buyer1, buyer2, buyer3, buyer4]) => {
     })
   })
 
-  describe('When purchases have been made and the sale is Closed', () => {
+  describe('When purchases have been made and the sale is ready to be closed', () => {
 
     before(async () => {
       await this.presale.mockSetTimestamp(startTime)
@@ -109,8 +109,8 @@ contract('Refund', ([anyone, appManager, buyer1, buyer2, buyer3, buyer4]) => {
       await this.presale.mockSetTimestamp(startTime + FUNDING_PERIOD)
     })
 
-    it('Sale state is Closed', async () => {
-      expect((await this.presale.currentSaleState()).toNumber()).to.equal(SALE_STATE.CLOSED)
+    it('Sale state is GoalReached', async () => {
+      expect((await this.presale.currentSaleState()).toNumber()).to.equal(SALE_STATE.GOAL_REACHED)
     })
 
     it('Should revert if a buyer attempts to get a refund', async () => {

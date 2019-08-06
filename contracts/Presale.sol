@@ -66,6 +66,8 @@ contract Presale is AragonApp {
     uint256 public constant PRECISION_MULTIPLIER = 10 ** 16;
     uint32 public constant CONNECTOR_WEIGHT_INV = 10;
 
+    bool private fundraisingInitialized;
+
     // Keeps track of how much dai is spent, per purchase, per buyer.
     mapping(address => mapping(uint256 => uint256)) public purchases;
     /*      |                  |          |
@@ -75,10 +77,11 @@ contract Presale is AragonApp {
      */
 
     enum SaleState {
-        Pending,   // Sale is closed and waiting to be started.
-        Funding,   // Sale has started and contributors can purchase tokens.
-        Refunding, // Sale did not reach daiFundingGoal and contributors may retrieve their funds.
-        Closed     // Sale reached daiFundingGoal and the Fundraising app is ready to be initialized.
+        Pending,     // Sale is closed and waiting to be started.
+        Funding,     // Sale has started and contributors can purchase tokens.
+        Refunding,   // Sale did not reach daiFundingGoal and contributors may retrieve their funds.
+        GoalReached, // Sale reached daiFundingGoal and the Fundraising app is ready to be initialized.
+        Closed       // After GoalReached, sale was closed and the Fundraising app was initialized.
     }
 
     /*
@@ -192,9 +195,13 @@ contract Presale is AragonApp {
     }
 
     function close() public {
-        require(currentSaleState() == SaleState.Closed, ERROR_INVALID_STATE);
+        require(currentSaleState() == SaleState.GoalReached, ERROR_INVALID_STATE);
 
-        require(daiToken.transfer(fundraisingPool, totalDaiRaised), ERROR_DAI_TRANSFER_REVERTED);
+        uint256 daiForBeneficiary = totalDaiRaised.mul(PRECISION_MULTIPLIER).mul(percentFundingForBeneficiary).div(100);
+        require(daiToken.transfer(beneficiaryAddress, daiForBeneficiary.div(PRECISION_MULTIPLIER)), ERROR_DAI_TRANSFER_REVERTED);
+
+        uint256 daiForPool = daiToken.balanceOf(address(this));
+        require(daiToken.transfer(fundraisingPool, daiForPool), ERROR_DAI_TRANSFER_REVERTED);
 
         fundraisingController.addCollateralToken(
             daiToken,
@@ -203,6 +210,8 @@ contract Presale is AragonApp {
             CONNECTOR_WEIGHT_INV,
             tapRate
         );
+
+        fundraisingInitialized = true;
 
         emit SaleClosed();
     }
@@ -224,7 +233,11 @@ contract Presale is AragonApp {
             if (totalDaiRaised < daiFundingGoal) {
                 return SaleState.Refunding;
             } else {
-                return SaleState.Closed;
+                if (fundraisingInitialized) {
+                    return SaleState.Closed;
+                } else {
+                    return SaleState.GoalReached;
+                }
             }
         }
     }

@@ -132,7 +132,7 @@ contract('Buy', ([anyone, appManager, buyer1, buyer2]) => {
           })
         })
 
-        describe('When the sale is Closed', () => {
+        describe('When the sale state is GoalReached', () => {
 
           before(async () => {
             await this.presale.mockSetTimestamp(startTime + 1)
@@ -141,7 +141,7 @@ contract('Buy', ([anyone, appManager, buyer1, buyer2]) => {
           })
 
           it('Sale state is Closed', async () => {
-            expect((await this.presale.currentSaleState()).toNumber()).to.equal(SALE_STATE.CLOSED)
+            expect((await this.presale.currentSaleState()).toNumber()).to.equal(SALE_STATE.GOAL_REACHED)
           })
 
           it('Reverts if a user attempts to buy tokens', async () => {
