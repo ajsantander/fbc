@@ -250,7 +250,7 @@ const deploy = {
   },
   deployDefaultSetup: async (test, appManager) => {
     await deploy.prepareDefaultSetup(test, appManager)
-    await deploy.initializePresale(test, deploy.defaultDeployParams(test, appManager))
+    return await deploy.initializePresale(test, deploy.defaultDeployParams(test, appManager))
   }
 }
 

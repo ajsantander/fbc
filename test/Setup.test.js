@@ -23,10 +23,19 @@ contract('Setup', ([anyone, appManager, someEOA]) => {
 
   describe('When deploying the app with valid parameters', () => {
 
-    before(() => deployDefaultSetup(this, appManager))
+    let presaleInitializationTx
+
+    before(async () => {
+      presaleInitializationTx = await deployDefaultSetup(this, appManager)
+    })
 
     it('App gets deployed', async () => {
       expect(web3.isAddress(this.presale.address)).to.equal(true)
+    })
+
+    it('Gas used is ~3.38e6', async () => {
+      const gasUsed = presaleInitializationTx.receipt.gasUsed
+      expect(gasUsed).to.be.below(3.38e6)
     })
 
     it('Deploys the Fundraising, and other apps correctly', async () => {
