@@ -9,7 +9,7 @@ const getState = async (test) => {
   return (await test.presale.currentSaleState()).toNumber()
 }
 
-contract('Vesting', ([anyone, appManager, buyer]) => {
+contract('States', ([anyone, appManager, buyer]) => {
 
   describe('When a sale is deployed', () => {
 

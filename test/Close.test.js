@@ -6,7 +6,7 @@ const {
   PERCENT_FUNDING_FOR_BENEFICIARY
 } = require('./common/constants')
 const { deployDefaultSetup } = require('./common/deploy')
-const { getEvent, assertExternalEvent } = require('./common/utils')
+const { getEvent } = require('./common/utils')
 const { assertRevert } = require('@aragon/test-helpers/assertThrow')
 
 const BUYERS_DAI_BALANCE = 20000
@@ -63,10 +63,6 @@ contract('Close', ([anyone, appManager, buyer1]) => {
 
       it('Fundraising app should be initialized correctly', async () => {
         expect(getEvent(closeReceipt, 'SaleClosed')).to.exist
-
-        assertExternalEvent(closeReceipt, 'AddTokenTap(address,uint256)') // Tap
-        assertExternalEvent(closeReceipt, 'AddCollateralToken(address)') // Pool
-        assertExternalEvent(closeReceipt, 'AddCollateralToken(address,uint256,uint256,uint32)') // Market maker
       })
     })
   })
