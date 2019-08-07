@@ -19,10 +19,10 @@ const utils = {
   },
 
   daiToProjectTokens: (dai) => {
-    return dai * utils.daiToProjectTokenMultiplier()
+    return dai * utils.daiToProjectTokenExchangeRate()
   },
 
-  daiToProjectTokenMultiplier: () => {
+  daiToProjectTokenExchangeRate: () => {
     const connectorWeightDec = CONNECTOR_WEIGHT / PPM;
     const supplyOfferedDec = PERCENT_SUPPLY_OFFERED / PPM;
     return Math.floor(

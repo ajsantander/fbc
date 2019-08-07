@@ -10,16 +10,25 @@ import "@aragon/apps-shared-minime/contracts/MiniMeToken.sol";
 import "@aragon/apps-token-manager/contracts/TokenManager.sol";
 
 import "@ablack/controller-aragon-fundraising/contracts/AragonFundraisingController.sol";
+import "@ablack/fundraising-module-pool/contracts/Pool.sol";
 
 
 contract Presale is AragonApp {
     using SafeMath for uint256;
     using SafeMath64 for uint64;
 
+    /*
+     * Events
+     */
+
     event SaleStarted();
     event SaleClosed();
     event TokensPurchased(address indexed buyer, uint256 daiSpent, uint256 tokensPurchased, uint256 purchaseId);
     event TokensRefunded(address indexed buyer, uint256 daiRefunded, uint256 tokensBurned, uint256 purchaseId);
+
+    /*
+     * Errors
+     */
 
     string private constant ERROR_INVALID_STATE                  = "PRESALE_INVALID_STATE";
     string private constant ERROR_CAN_NOT_FORWARD                = "PRESALE_CAN_NOT_FORWARD";
@@ -37,36 +46,59 @@ contract Presale is AragonApp {
     string private constant ERROR_INVALID_POOL                   = "PRESALE_INVALID_POOL";
     string private constant ERROR_INVALID_BENEFICIARY_ADDRESS    = "PRESALE_INVALID_BENEFICIARY_ADDRESS";
 
+    /*
+     * Roles
+     */
+
     bytes32 public constant START_ROLE = keccak256("START_ROLE");
     bytes32 public constant BUY_ROLE   = keccak256("BUY_ROLE");
 
+    /*
+     * Properties
+     */
+
     ERC20 public daiToken;
+
     MiniMeToken public projectToken;
     TokenManager public projectTokenManager;
 
-    uint64 public startDate;
-
-    uint256 public totalDaiRaised;
-    uint64 public fundingPeriod;
-
     uint256 public daiFundingGoal;
-    uint256 public percentFundingForBeneficiary; // Represented in PPM, see below
-    address public beneficiaryAddress;
+    uint256 public totalDaiRaised;
 
+    // The Fundraising controller where collateral tokens will be added
+    // to once this Presale is closed.
     AragonFundraisingController fundraisingController;
-    address public fundraisingPool;
     uint256 public tapRate;
+    uint256 public percentSupplyOffered; // Represented in PPM, see below
+    bool private fundraisingInitialized;
+
+    // Once the Presale is closed, totalDaiRaised is split according to
+    // percentFundingForBeneficiary, between beneficiaryAddress and fundraisingPool.
+    Pool public fundraisingPool;
+    address public beneficiaryAddress;
+    uint256 public percentFundingForBeneficiary; // Represented in PPM, see below
+
+    // Date when the Presale is started and its state is Funding.
+    // Note: Also represents the starting date for all vested project tokens.
+    uint64 public startDate;
 
     uint64 public vestingCliffPeriod;
     uint64 public vestingCompletePeriod;
 
-    uint256 public percentSupplyOffered; // Represented in PPM, see below
-    uint256 public daiToProjectTokenMultiplier;
+    // Period after startDate, in which the sale is Funding and accepts contributions.
+    // If the daiFundingGoal is not reached within it, the sale cannot be Closed
+    // and the state switches to Refunding, allowing dai refunds.
+    uint64 public fundingPeriod;
 
-    uint256 public constant PPM = 1000000; // Percentages are represented in the PPM range (Parts per Million): 0 => 0%, 1000000 => 100%
+    // Number of project tokens that will be sold for each dai.
+    // Calculated after initialization from CONNECTOR_WEIGHT_PPM and percentSupplyOffered.
+    uint256 public daiToProjectTokenExchangeRate;
+
+    // Percentages are represented in the PPM range (Parts per Million): 0 => 0%, 1000000 => 100%
+    uint256 public constant PPM = 1000000;
+
+    // Used to calculate daiToProjectTokenExchangeRate.
     uint32 public constant CONNECTOR_WEIGHT_PPM = 100000; // 10%
-
-    bool private fundraisingInitialized;
 
     // Keeps track of how much dai is spent, per purchase, per buyer.
     mapping(address => mapping(uint256 => uint256)) public purchases;
@@ -97,7 +129,7 @@ contract Presale is AragonApp {
         uint256 _daiFundingGoal,
         uint256 _percentSupplyOffered,
         uint64 _fundingPeriod,
-        address _fundraisingPool,
+        Pool _fundraisingPool,
         AragonFundraisingController _fundraisingController,
         uint256 _tapRate,
         address _beneficiaryAddress,
@@ -221,7 +253,7 @@ contract Presale is AragonApp {
      */
 
     function daiToProjectTokens(uint256 _daiAmount) public view returns (uint256) {
-        return _daiAmount.mul(daiToProjectTokenMultiplier);
+        return _daiAmount.mul(daiToProjectTokenExchangeRate);
     }
 
     function currentSaleState() public view returns (SaleState) {
@@ -255,7 +287,7 @@ contract Presale is AragonApp {
     function _calculateExchangeRate() private {
         uint256 connectorWeight = uint256(CONNECTOR_WEIGHT_PPM);
         uint256 exchangeRate = daiFundingGoal.mul(PPM).div(connectorWeight).mul(percentSupplyOffered).div(PPM);
-        daiToProjectTokenMultiplier = exchangeRate;
+        daiToProjectTokenExchangeRate = exchangeRate;
     }
 
     function _setProjectToken(MiniMeToken _projectToken, TokenManager _projectTokenManager) private {

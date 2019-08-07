@@ -16,7 +16,7 @@ const {
   defaultDeployParams,
   deployDefaultSetup
 } = require('./common/deploy')
-const { daiToProjectTokenMultiplier } = require('./common/utils')
+const { daiToProjectTokenExchangeRate } = require('./common/utils')
 const { assertRevert } = require('@aragon/test-helpers/assertThrow')
 
 contract('Setup', ([anyone, appManager, someEOA]) => {
@@ -82,8 +82,8 @@ contract('Setup', ([anyone, appManager, someEOA]) => {
     })
 
     it('Exchange rate is calculated to the expected value', async () => {
-      const receivedValue = (await this.presale.daiToProjectTokenMultiplier()).toNumber()
-      const expectedValue = daiToProjectTokenMultiplier()
+      const receivedValue = (await this.presale.daiToProjectTokenExchangeRate()).toNumber()
+      const expectedValue = daiToProjectTokenExchangeRate()
       expect(receivedValue).to.equal(expectedValue)
     })
 
