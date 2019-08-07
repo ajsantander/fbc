@@ -13,7 +13,7 @@ const BUYERS_DAI_BALANCE = 20000
 
 contract('Close', ([anyone, appManager, buyer1]) => {
 
-  describe('When enough purchases have been made to close the sale and funding period has elapsed', () => {
+  describe('When enough purchases have been made to close the sale', () => {
 
     before(async () => {
       await deployDefaultSetup(this, appManager)
@@ -23,8 +23,6 @@ contract('Close', ([anyone, appManager, buyer1]) => {
 
       // Make a single purchase that reaches the funding goal
       await this.presale.buy(BUYERS_DAI_BALANCE, { from: buyer1 })
-
-      await this.presale.mockIncreaseTime(FUNDING_PERIOD)
     })
 
     it('Sale state is GoalReached', async () => {

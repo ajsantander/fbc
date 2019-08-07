@@ -74,15 +74,15 @@ contract('States', ([anyone, appManager, buyer]) => {
           })
         })
 
-        describe('When purchases are made, reaching the funding goal', () => {
+        describe('When purchases are made, reaching the funding goal before the funding period elapsed', () => {
 
           before(async () => {
             await this.presale.mockSetTimestamp(startDate + FUNDING_PERIOD / 2)
             await this.presale.buy(DAI_FUNDING_GOAL / 2, { from: buyer })
           })
 
-          it('The state is still Funding', async () => {
-            expect(await getState(this)).to.equal(SALE_STATE.FUNDING)
+          it('The state is GoalReached', async () => {
+            expect(await getState(this)).to.equal(SALE_STATE.GOAL_REACHED)
           })
 
           describe('When the funding period elapses having reached the funding goal', () => {
@@ -91,7 +91,7 @@ contract('States', ([anyone, appManager, buyer]) => {
               await this.presale.mockSetTimestamp(startDate + FUNDING_PERIOD)
             })
 
-            it('The state is Refunding', async () => {
+            it('The state is still GoalReached', async () => {
               expect(await getState(this)).to.equal(SALE_STATE.GOAL_REACHED)
             })
           })

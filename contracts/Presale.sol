@@ -77,9 +77,9 @@ contract Presale is AragonApp {
      */
 
     enum SaleState {
-        Pending,     // Sale is closed and waiting to be started.
+        Pending,     // Sale is idle and pending to be started.
         Funding,     // Sale has started and contributors can purchase tokens.
-        Refunding,   // Sale did not reach daiFundingGoal and contributors may retrieve their funds.
+        Refunding,   // Sale did not reach daiFundingGoal within fundingPeriod and contributors may claim refunds.
         GoalReached, // Sale reached daiFundingGoal and the Fundraising app is ready to be initialized.
         Closed       // After GoalReached, sale was closed and the Fundraising app was initialized.
     }
@@ -227,18 +227,16 @@ contract Presale is AragonApp {
     function currentSaleState() public view returns (SaleState) {
         if (startDate == 0) {
             return SaleState.Pending;
+        } else if (totalDaiRaised >= daiFundingGoal) {
+            if (fundraisingInitialized) {
+                return SaleState.Closed;
+            } else {
+                return SaleState.GoalReached;
+            }
         } else if (_timeSinceFundingStarted() < fundingPeriod) {
             return SaleState.Funding;
         } else {
-            if (totalDaiRaised < daiFundingGoal) {
-                return SaleState.Refunding;
-            } else {
-                if (fundraisingInitialized) {
-                    return SaleState.Closed;
-                } else {
-                    return SaleState.GoalReached;
-                }
-            }
+            return SaleState.Refunding;
         }
     }
 

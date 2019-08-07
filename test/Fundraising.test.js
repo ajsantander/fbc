@@ -8,7 +8,7 @@ const { assertExternalEvent } = require('./common/utils')
 
 contract('Fundraising', ([anyone, appManager, buyer]) => {
 
-  describe('When a sale closed', () => {
+  describe('When the presale closed', () => {
 
     let closeReceipt
 
@@ -21,8 +21,6 @@ contract('Fundraising', ([anyone, appManager, buyer]) => {
       await this.daiToken.generateTokens(buyer, DAI_FUNDING_GOAL)
       await this.daiToken.approve(this.presale.address, DAI_FUNDING_GOAL, { from: buyer })
       await this.presale.buy(DAI_FUNDING_GOAL, { from: buyer })
-
-      await this.presale.mockSetTimestamp(startDate + FUNDING_PERIOD)
 
       closeReceipt = await this.presale.close()
     })

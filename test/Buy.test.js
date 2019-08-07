@@ -144,10 +144,9 @@ contract('Buy', ([anyone, appManager, buyer1, buyer2]) => {
           before(async () => {
             await this.presale.mockSetTimestamp(startTime + 1)
             await this.presale.buy(DAI_FUNDING_GOAL, { from: buyer2 })
-            await this.presale.mockSetTimestamp(startTime + FUNDING_PERIOD)
           })
 
-          it('Sale state is Closed', async () => {
+          it('Sale state is GoalReached', async () => {
             expect((await this.presale.currentSaleState()).toNumber()).to.equal(SALE_STATE.GOAL_REACHED)
           })
 
