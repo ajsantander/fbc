@@ -83,7 +83,8 @@ contract('Setup', ([anyone, appManager, someEOA]) => {
 
     it('Exchange rate is calculated to the expected value', async () => {
       const receivedValue = (await this.presale.daiToProjectTokenMultiplier()).toNumber()
-      expect(receivedValue).to.equal(daiToProjectTokenMultiplier())
+      const expectedValue = daiToProjectTokenMultiplier()
+      expect(receivedValue).to.equal(expectedValue)
     })
 
     it('Beneficiary address is set', async () => {
@@ -170,7 +171,7 @@ contract('Setup', ([anyone, appManager, someEOA]) => {
       )
       await assertRevert(
         initializePresale(this, { ...defaultParams,
-          percentSupplyOffered: 101
+          percentSupplyOffered: 1e6 + 1
         }), 'PRESALE_INVALID_PERCENT_VALUE'
       )
     })
@@ -183,7 +184,7 @@ contract('Setup', ([anyone, appManager, someEOA]) => {
       )
       await assertRevert(
         initializePresale(this, { ...defaultParams,
-          percentFundingForBeneficiary: 101
+          percentFundingForBeneficiary: 1e6 + 1
         }), 'PRESALE_INVALID_PERCENT_VALUE'
       )
     })

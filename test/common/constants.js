@@ -1,6 +1,7 @@
 // Generic
 const NOW = new Date().getTime() / 1000
 const DAYS = 24 * 3600
+const PPM = 1e6 /* "Parts per million", used to represent percentages; 100% = 1e6, 50% = 0.5 * 1e6, etc... */
 const ANY_ADDRESS = '0xffffffffffffffffffffffffffffffffffffffff'
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 const SALE_STATE = {
@@ -15,11 +16,11 @@ const SALE_STATE = {
 const VESTING_CLIFF_PERIOD = 90 * DAYS
 const VESTING_COMPLETE_PERIOD = 360 * DAYS
 const DAI_FUNDING_GOAL = 20000
-const PERCENT_SUPPLY_OFFERED = 90
-const CONNECTOR_WEIGHT = 0.1
+const PERCENT_SUPPLY_OFFERED = 0.9 * PPM // 90%
+const CONNECTOR_WEIGHT = 0.1 * PPM // 10%
 const FUNDING_PERIOD = 14 * DAYS
 const TAP_RATE = 5000
-const PERCENT_FUNDING_FOR_BENEFICIARY = 25
+const PERCENT_FUNDING_FOR_BENEFICIARY = 0.25 * PPM // 25%
 
 // Funding paramenters
 const MAX_MONTHLY_TAP_INCREASE_RATE = 50e16
@@ -30,6 +31,7 @@ const SELL_FEE_PERCENT = 100000000000000000
 module.exports = {
   NOW,
   DAYS,
+  PPM,
   ANY_ADDRESS,
   ZERO_ADDRESS,
   VESTING_CLIFF_PERIOD,

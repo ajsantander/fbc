@@ -3,7 +3,8 @@ const {
   SALE_STATE,
   CONNECTOR_WEIGHT,
   TAP_RATE,
-  PERCENT_FUNDING_FOR_BENEFICIARY
+  PERCENT_FUNDING_FOR_BENEFICIARY,
+  PPM
 } = require('./common/constants')
 const { deployDefaultSetup } = require('./common/deploy')
 const { getEvent } = require('./common/utils')
@@ -45,7 +46,7 @@ contract('Close', ([anyone, appManager, buyer1]) => {
         expect((await this.daiToken.balanceOf(this.presale.address)).toNumber()).to.equal(0)
 
         const totalDaiRaised = (await this.presale.totalDaiRaised()).toNumber()
-        const daiForBeneficiary = Math.floor(totalDaiRaised * PERCENT_FUNDING_FOR_BENEFICIARY / 100)
+        const daiForBeneficiary = Math.floor(totalDaiRaised * PERCENT_FUNDING_FOR_BENEFICIARY / PPM)
         const daiForPool = totalDaiRaised - daiForBeneficiary
         const fundraisingPool = await this.presale.fundraisingPool()
         expect((await this.daiToken.balanceOf(appManager)).toNumber()).to.equal(daiForBeneficiary)

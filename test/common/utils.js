@@ -1,7 +1,8 @@
 const {
   DAI_FUNDING_GOAL,
   CONNECTOR_WEIGHT,
-  PERCENT_SUPPLY_OFFERED
+  PERCENT_SUPPLY_OFFERED,
+  PPM
 } = require('./constants')
 const sha3 = require('js-sha3').keccak_256
 
@@ -22,8 +23,10 @@ const utils = {
   },
 
   daiToProjectTokenMultiplier: () => {
+    const connectorWeightDec = CONNECTOR_WEIGHT / PPM;
+    const supplyOfferedDec = PERCENT_SUPPLY_OFFERED / PPM;
     return Math.floor(
-      (DAI_FUNDING_GOAL / CONNECTOR_WEIGHT) / PERCENT_SUPPLY_OFFERED
+      (DAI_FUNDING_GOAL / connectorWeightDec) * supplyOfferedDec
     )
   },
 

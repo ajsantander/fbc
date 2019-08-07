@@ -50,7 +50,7 @@ contract Presale is AragonApp {
     uint64 public fundingPeriod;
 
     uint256 public daiFundingGoal;
-    uint256 public percentFundingForBeneficiary;
+    uint256 public percentFundingForBeneficiary; // Represented in PPM, see below
     address public beneficiaryAddress;
 
     AragonFundraisingController fundraisingController;
@@ -60,11 +60,11 @@ contract Presale is AragonApp {
     uint64 public vestingCliffPeriod;
     uint64 public vestingCompletePeriod;
 
-    uint256 public percentSupplyOffered;
+    uint256 public percentSupplyOffered; // Represented in PPM, see below
     uint256 public daiToProjectTokenMultiplier;
 
-    uint256 public constant PRECISION_MULTIPLIER = 10 ** 16;
-    uint32 public constant CONNECTOR_WEIGHT_INV = 10;
+    uint256 public constant PPM = 1000000; // Percentages are represented in the PPM range (Parts per Million): 0 => 0%, 1000000 => 100%
+    uint32 public constant CONNECTOR_WEIGHT_PPM = 100000; // 10%
 
     bool private fundraisingInitialized;
 
@@ -115,10 +115,10 @@ contract Presale is AragonApp {
         require(_daiFundingGoal > 0, ERROR_INVALID_DAI_FUNDING_GOAL);
         require(_tapRate > 0, ERROR_INVALID_TAP_RATE);
         require(_percentSupplyOffered > 0, ERROR_INVALID_PERCENT_VALUE);
-        require(_percentSupplyOffered < 100, ERROR_INVALID_PERCENT_VALUE);
+        require(_percentSupplyOffered < PPM, ERROR_INVALID_PERCENT_VALUE);
         require(_beneficiaryAddress != 0x0, ERROR_INVALID_BENEFICIARY_ADDRESS);
         require(_percentFundingForBenefiriary > 0, ERROR_INVALID_PERCENT_VALUE);
-        require(_percentFundingForBenefiriary < 100, ERROR_INVALID_PERCENT_VALUE);
+        require(_percentFundingForBenefiriary < PPM, ERROR_INVALID_PERCENT_VALUE);
         // TODO: Perform further validations on the set fundrasing app?
 
         initialized();
@@ -197,8 +197,8 @@ contract Presale is AragonApp {
     function close() public {
         require(currentSaleState() == SaleState.GoalReached, ERROR_INVALID_STATE);
 
-        uint256 daiForBeneficiary = totalDaiRaised.mul(PRECISION_MULTIPLIER).mul(percentFundingForBeneficiary).div(100);
-        require(daiToken.transfer(beneficiaryAddress, daiForBeneficiary.div(PRECISION_MULTIPLIER)), ERROR_DAI_TRANSFER_REVERTED);
+        uint256 daiForBeneficiary = totalDaiRaised.mul(percentFundingForBeneficiary).div(PPM);
+        require(daiToken.transfer(beneficiaryAddress, daiForBeneficiary), ERROR_DAI_TRANSFER_REVERTED);
 
         uint256 daiForPool = daiToken.balanceOf(address(this));
         require(daiToken.transfer(fundraisingPool, daiForPool), ERROR_DAI_TRANSFER_REVERTED);
@@ -207,7 +207,7 @@ contract Presale is AragonApp {
             daiToken,
             0,
             0,
-            CONNECTOR_WEIGHT_INV,
+            CONNECTOR_WEIGHT_PPM,
             tapRate
         );
 
@@ -253,10 +253,8 @@ contract Presale is AragonApp {
     }
 
     function _calculateExchangeRate() private {
-        uint256 connectorWeightInv = uint256(CONNECTOR_WEIGHT_INV);
-        uint256 exchangeRate = daiFundingGoal.mul(PRECISION_MULTIPLIER).div(connectorWeightInv);
-        exchangeRate = exchangeRate.mul(100).div(percentSupplyOffered);
-        exchangeRate = exchangeRate.div(PRECISION_MULTIPLIER);
+        uint256 connectorWeight = uint256(CONNECTOR_WEIGHT_PPM);
+        uint256 exchangeRate = daiFundingGoal.mul(PPM).div(connectorWeight).mul(percentSupplyOffered).div(PPM);
         daiToProjectTokenMultiplier = exchangeRate;
     }
 
