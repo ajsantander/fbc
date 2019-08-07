@@ -127,7 +127,9 @@ contract('Refund', ([anyone, appManager, buyer1, buyer2, buyer3, buyer4, buyer5]
       await this.presale.mockSetTimestamp(startTime)
       await this.daiToken.generateTokens(buyer4, DAI_FUNDING_GOAL)
       await this.daiToken.approve(this.presale.address, DAI_FUNDING_GOAL, { from: buyer4 })
-      await this.presale.buy(DAI_FUNDING_GOAL, {  from: buyer4 })
+
+      const totalDaiRaised = (await this.presale.totalDaiRaised()).toNumber()
+      await this.presale.buy(DAI_FUNDING_GOAL - totalDaiRaised, {  from: buyer4 })
     })
 
     it('Sale state is GoalReached', async () => {

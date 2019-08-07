@@ -121,6 +121,13 @@ contract('Buy', ([anyone, appManager, buyer1, buyer2]) => {
           expect((await this.presale.purchases(buyer2, 2)).toNumber()).to.equal(3)
         })
 
+        it('A purchase cannot cause totalDaiRaised to be greater than the fundingGoal', async () => {
+          await assertRevert(
+            this.presale.buy(DAI_FUNDING_GOAL * 2, { from: buyer2 }),
+            'PRESALE_EXCEEDS_FUNDING_GOAL'
+          )
+        })
+
         describe('When the sale is Refunding', () => {
 
           before(async () => {
@@ -143,7 +150,9 @@ contract('Buy', ([anyone, appManager, buyer1, buyer2]) => {
 
           before(async () => {
             await this.presale.mockSetTimestamp(startTime + 1)
-            await this.presale.buy(DAI_FUNDING_GOAL, { from: buyer2 })
+
+            const totalDaiRaised = (await this.presale.totalDaiRaised()).toNumber()
+            await this.presale.buy(DAI_FUNDING_GOAL - totalDaiRaised, { from: buyer2 })
           })
 
           it('Sale state is GoalReached', async () => {
