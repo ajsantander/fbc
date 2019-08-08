@@ -4,6 +4,11 @@
       "name": "Start the presale",
       "id": "START_ROLE",
       "params": []
+    },
+    {
+      "name": "Purchase tokens",
+      "id": "BUY_ROLE",
+      "params": []
     }
   ],
   "environments": {

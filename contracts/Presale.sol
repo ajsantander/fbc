@@ -266,7 +266,7 @@ contract Presale is AragonApp {
 
         // (buyer) ~~~> project tokens ~~~> (Token manager)
         // Note: this assumes that the buyer didn't transfer any of the vested tokens.
-        // The assumption can be made considering the imposed restriction of fundingPeriod < vestingCliffPeriod < vestingCompletePeriod.
+        // The assumption can be made, considering the imposed restriction of fundingPeriod < vestingCliffPeriod < vestingCompletePeriod.
         (uint256 tokensSold,,,,,) = projectTokenManager.getVesting(_buyer, _purchaseId);
         projectTokenManager.revokeVesting(_buyer, _purchaseId);
 
