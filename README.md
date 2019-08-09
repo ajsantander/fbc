@@ -1,5 +1,8 @@
 # Aragon Presale app
 
+## Notice: This repository is frozen!
+It has been ported to act as an Aragon Black Fundraising app module, and submitted as a PR that is currently being discussed: https://github.com/AragonBlack/fundraising/pull/52
+
 Bootstraps an Aragon Black Fundraising app: https://github.com/AragonBlack/fundraising
 
 #### Development
